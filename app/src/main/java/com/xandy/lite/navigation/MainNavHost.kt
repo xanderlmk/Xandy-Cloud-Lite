@@ -1,0 +1,648 @@
+package com.xandy.lite.navigation
+
+import android.app.Activity
+import android.app.PendingIntent
+import android.app.RecoverableSecurityException
+import android.content.Context
+import android.os.Build
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.ManagedActivityResultLauncher
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.annotation.RequiresApi
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import com.xandy.lite.controllers.view.models.AddToLocalPlVM
+import com.xandy.lite.controllers.view.models.LocalAlbumVM
+import com.xandy.lite.controllers.view.models.LocalArtistVM
+import com.xandy.lite.controllers.view.models.LocalFolderVM
+import com.xandy.lite.controllers.view.models.LocalGenreVM
+import com.xandy.lite.controllers.view.models.LocalMediaVM
+import com.xandy.lite.controllers.view.models.LocalPLVM
+import com.xandy.lite.controllers.view.models.PickedSongVM
+import com.xandy.lite.models.application.AppVMProvider
+import com.xandy.lite.models.application.XANDY_CLOUD
+import com.xandy.lite.models.ui.DeleteResult
+import com.xandy.lite.models.ui.InsertResult
+import com.xandy.lite.models.ui.UpdateResult
+import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.views.AddToPlaylistView
+import com.xandy.lite.views.LocalAlbumView
+import com.xandy.lite.views.LocalArtistView
+import com.xandy.lite.views.LocalFolderView
+import com.xandy.lite.views.LocalGenreView
+import com.xandy.lite.views.LocalMusicView
+import com.xandy.lite.views.LocalPlaylistView
+import com.xandy.lite.views.edit.audio.EditAudioView
+import com.xandy.lite.views.picked.song.SongView
+import kotlinx.coroutines.launch
+
+
+@Composable
+fun MainNavHost(
+    mainNavController: NavHostController, getUIStyle: GetUIStyle,
+    getController: () -> Unit, navVM: NavViewModel
+) {
+    val content = CustomNavigationContent(getUIStyle)
+    val context = LocalContext.current
+    val sd by navVM.songDetails.collectAsStateWithLifecycle()
+    val modifier =
+        if (sd != null) Modifier
+            .fillMaxSize()
+            .padding(bottom = 60.dp)
+        else Modifier.fillMaxSize()
+    val isSelecting by navVM.isSelecting.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
+    val isSearching by navVM.isSearching.collectAsStateWithLifecycle()
+    val onPopBackStack: () -> Unit = {
+        val route = mainNavController.previousBackStackEntry?.destination?.route
+        route?.let { navVM.updateRoute(it) }
+        mainNavController.popBackStack()
+    }
+
+    val onNavigate: (String) -> Unit = {
+        mainNavController.navigate(it); navVM.updateRoute(it)
+    }
+    val onNavigateAndRemove: (String, String) -> Unit = { route, removable ->
+        mainNavController.navigateAndRemoveFromStack(route, removable); navVM.updateRoute(route)
+    }
+    val onSpecialPopBack: () -> Unit = {
+        val route = mainNavController.previousBackStackEntry?.destination?.route
+        if (route != null) {
+            navVM.updateRoute(route); mainNavController.popBackStack()
+        } else {
+            val new = LocalMusicDestination.route
+            navVM.updateRoute(new); mainNavController.navigate(new)
+        }
+    }
+    LaunchedEffect(Unit) {
+        Log.d(XANDY_CLOUD, "${mainNavController.currentBackStackEntry?.destination?.route}")
+    }
+    content.CustomNavigationTabBars(mainNavController, navVM, getController) {
+        NavHost(navController = mainNavController, startDestination = LocalMusicDestination.route) {
+            composable(PickedSongDestination.route) {
+                val songVM: PickedSongVM = viewModel(factory = AppVMProvider.Factory)
+                var showQueue by rememberSaveable { mutableStateOf(false) }
+                BackHandler {
+                    if (showQueue) {
+                        showQueue = false
+                    } else {
+                        navVM.stopCheckingPosition()
+                        onSpecialPopBack()
+                    }
+                }
+                SongView(songVM, getUIStyle, onToggle = { showQueue = !showQueue }, showQueue)
+            }
+
+            composable(LocalMusicDestination.route) {
+                BackHandler {
+                    if (isSelecting) {
+                        if (isSearching) navVM.turnOffSearch()
+                        else navVM.endSelect()
+                    } else {
+                        if (isSearching) navVM.turnOffSearch()
+                        else (mainNavController.context as? Activity)?.finish()
+                    }
+                }
+                var enabled by rememberSaveable { mutableStateOf(true) }
+                var audioPair by rememberSaveable {
+                    mutableStateOf(Pair<String?, String>(null, ""))
+                }
+                var showModal by rememberSaveable { mutableStateOf(false) }
+                val localMediaVM: LocalMediaVM = viewModel(factory = AppVMProvider.Factory)
+
+                WithDeleteModalAndLauncher(
+                    onResultOk = {
+                        coroutineScope.launch {
+                            onDelete(
+                                enabled, context, onToggle = { enabled = it }, audioPair, navVM
+                            )
+                        }
+                    }, onDismissRequest = { showModal = false },
+                    onDelete = {
+                        coroutineScope.launch {
+                            onTryDelete(
+                                enabled, context, audioPair = audioPair,
+                                onToggle = { t -> enabled = t },
+                                onDismissModal = { showModal = false },
+                                writeRequestLauncher = it,
+                                navVM = navVM
+                            )
+                        }
+                    }, string = audioPair.second.takeIf { str -> str.isNotEmpty() },
+                    showModal = showModal
+                ) { writeRequestLauncher ->
+                    LocalMusicView(
+                        modifier = modifier, getUIStyle = getUIStyle, localMediaVM = localMediaVM,
+                        onNavToPl = {
+                            coroutineScope.launch { navVM.updatePLIndex(it) }
+                            onNavigate(LocalPlDestination.route)
+                        },
+                        onNavToAlbum = {
+                            if (isSearching) navVM.turnOffSearch()
+                            coroutineScope.launch { navVM.updateAlbumName(it) }
+                            onNavigate(LocalAlbumDestination.route)
+                        },
+                        onNavToArtist = {
+                            if (isSearching) navVM.turnOffSearch()
+                            coroutineScope.launch { navVM.updateArtistName(it) }
+                            onNavigate(LocalArtistDestination.route)
+                        },
+                        onNavToGenre = {
+                            if (isSearching) navVM.turnOffSearch()
+                            coroutineScope.launch { navVM.updateGenreName(it) }
+                            onNavigate(LocalGenreDestination.route)
+                        },
+                        onNavToFolder = { s, l ->
+                            if (isSearching) navVM.turnOffSearch()
+                            coroutineScope.launch { navVM.updateBucketKey(s, l) }
+                            onNavigate(LocalBucketDestination.route)
+                        },
+                        onEdit = {
+                            if (isSearching) navVM.turnOffSearch()
+                            coroutineScope.launch { navVM.updateAudioUri(it) }
+                            onNavigate(EditAudioDestination.route)
+                        },
+                        onAdd = { id ->
+                            if (isSearching) navVM.turnOffSearch()
+                            coroutineScope.launch { navVM.toggleSong(id) }
+                            onNavigate(AddToPlDestination.route)
+                        },
+                        onDelete = { audio ->
+                            audioPair = Pair(audio.uri.toString(), audio.title); showModal = true
+                        }
+                    )
+                }
+            }
+            composable(LocalPlDestination.route) {
+                BackHandler {
+                    if (isSelecting) {
+                        if (isSearching) navVM.turnOffSearch()
+                        else navVM.endSelect()
+                    } else {
+                        if (isSearching) navVM.turnOffSearch() else onSpecialPopBack()
+
+                    }
+                }
+
+                val localPLVM: LocalPLVM = viewModel(factory = AppVMProvider.Factory)
+                val pickedPlaylist by localPLVM.plWithAudio.collectAsStateWithLifecycle()
+                pickedPlaylist?.let {
+                    LocalPlaylistView(
+                        localPLVM, getUIStyle, it,
+                        onAdd = { id ->
+                            coroutineScope.launch { navVM.toggleSong(id) }
+                            onNavigate(AddToPlDestination.route)
+                        },
+                        onEditSong = { songId ->
+                            coroutineScope.launch { navVM.updateAudioUri(songId) }
+                            onNavigate(EditAudioDestination.route)
+                        }
+                    )
+                } ?: Text("NULL")
+            }
+            composable(EditAudioDestination.route) {
+                BackHandler { onPopBackStack() }
+                val pickedAudio by navVM.pickedAudio.collectAsStateWithLifecycle()
+                val artworkList by navVM.artworkList.collectAsStateWithLifecycle()
+                var enabled by rememberSaveable { mutableStateOf(true) }
+                var updatedAudio by rememberSaveable { mutableStateOf(pickedAudio?.song) }
+                WithRequestLauncher(
+                    onResultOk = {
+                        coroutineScope.launch {
+                            val audio = updatedAudio
+                            if (audio == null) {
+                                Toast.makeText(
+                                    context, "Null audio file", Toast.LENGTH_SHORT
+                                ).show()
+                                return@launch
+                            }
+                            val result = navVM.updateAudioTags(audio)
+                            if (result is UpdateResult.Failure) Toast.makeText(
+                                context, "Failed to update tags", Toast.LENGTH_SHORT
+                            ).show()
+                            else onPopBackStack()
+                        }
+                    }
+                ) { writeRequestLauncher ->
+                    pickedAudio?.let {
+                        EditAudioView(it.song, enabled, artworkList) { newAudio ->
+                            coroutineScope.launch {
+                                updatedAudio = newAudio
+                                enabled = false
+                                val result = navVM.updateAudioTags(newAudio)
+                                when (val r = result) {
+                                    is UpdateResult.Failure -> Toast.makeText(
+                                        context, "Failed to update tags", Toast.LENGTH_SHORT
+                                    ).show()
+
+                                    is UpdateResult.SecurityException ->
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                            requestWritePermission(writeRequestLauncher, r.ex)
+                                        }
+
+                                    is UpdateResult.FileException -> {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            requestWritePermission(writeRequestLauncher, r.request)
+                                        }
+                                    }
+
+                                    else -> onPopBackStack()
+                                }
+                                enabled = true
+                            }
+                        }
+                    }
+                }
+            }
+            composable(AddToPlDestination.route) {
+                BackHandler { navVM.resetSearch(); onPopBackStack() }
+                val selectedSongIds by navVM.selectedSongIds.collectAsStateWithLifecycle()
+                val vm: AddToLocalPlVM = viewModel(factory = AppVMProvider.Factory)
+                var dismissEnabled by rememberSaveable { mutableStateOf(true) }
+                AddToPlaylistView(
+                    getUIStyle = getUIStyle, modifier = modifier, vm = vm, enabled = dismissEnabled,
+                    onAdd = {
+                        coroutineScope.launch {
+                            dismissEnabled = false
+                            Log.d(XANDY_CLOUD, "$selectedSongIds")
+                            val result = vm.insertSongsToPl(selectedSongIds, it)
+                            if (result) {
+                                navVM.endSelect(); navVM.resetSearch()
+                                navVM.navToPlaylist(it)
+                                onNavigateAndRemove(
+                                    LocalPlDestination.route, AddToPlDestination.route
+                                )
+                            } else Toast.makeText(
+                                context, "Failed to add songs", Toast.LENGTH_SHORT
+                            ).show()
+                            dismissEnabled = true
+                        }
+
+                    },
+                    onAddNew = {
+                        coroutineScope.launch {
+                            dismissEnabled = false
+                            val result = vm.addPlWithSongs(selectedSongIds, it)
+                            when (result) {
+                                InsertResult.Exists -> Toast.makeText(
+                                    context, "Name already exists", Toast.LENGTH_SHORT
+                                ).show()
+
+                                InsertResult.Failure -> Toast.makeText(
+                                    context, "Failed to add playlist", Toast.LENGTH_SHORT
+                                ).show()
+
+                                InsertResult.Success -> {
+                                    navVM.endSelect(); navVM.resetSearch()
+                                    navVM.navToPlaylist(it)
+                                    onNavigateAndRemove(
+                                        LocalPlDestination.route, AddToPlDestination.route
+                                    )
+                                }
+                            }
+                            dismissEnabled = true
+                        }
+                    }
+                )
+            }
+            composable(LocalAlbumDestination.route) {
+                BackHandler {
+                    if (isSelecting) {
+                        if (isSearching) navVM.turnOffSearch()
+                        else navVM.endSelect()
+                    } else {
+                        if (isSearching) navVM.turnOffSearch()
+                        else onPopBackStack()
+                    }
+                }
+                val localAlbumVM: LocalAlbumVM = viewModel(factory = AppVMProvider.Factory)
+                val album by localAlbumVM.album.collectAsStateWithLifecycle()
+                val alIsLoading by localAlbumVM.localAudiosLoading.collectAsStateWithLifecycle()
+                var enabled by rememberSaveable { mutableStateOf(true) }
+                var audioPair by rememberSaveable {
+                    mutableStateOf(Pair<String?, String>(null, ""))
+                }
+                var showModal by rememberSaveable { mutableStateOf(false) }
+                WithDeleteModalAndLauncher(
+                    onResultOk = {
+                        coroutineScope.launch {
+                            onDelete(
+                                enabled, context, onToggle = { enabled = it }, audioPair, navVM
+                            )
+                        }
+                    }, onDismissRequest = { showModal = false },
+                    onDelete = {
+                        coroutineScope.launch {
+                            onTryDelete(
+                                enabled, context, audioPair = audioPair,
+                                onToggle = { t -> enabled = t },
+                                onDismissModal = { showModal = false },
+                                writeRequestLauncher = it,
+                                navVM = navVM
+                            )
+                        }
+                    }, string = audioPair.second.takeIf { str -> str.isNotEmpty() },
+                    showModal = showModal
+                ) { writeRequestLauncher ->
+                    album?.let {
+                        LocalAlbumView(
+                            it, enabled = !alIsLoading, getUIStyle = getUIStyle, vm = localAlbumVM,
+                            onEdit = { str ->
+                                coroutineScope.launch { navVM.updateAudioUri(str) }
+                                onNavigate(EditAudioDestination.route)
+                            },
+                            onAdd = { id ->
+                                coroutineScope.launch { navVM.toggleSong(id) }
+                                onNavigate(AddToPlDestination.route)
+                            },
+                            onDelete = { audio ->
+                                audioPair = Pair(audio.uri.toString(), audio.title)
+                                showModal = true
+                            }, modifier = modifier
+                        )
+                    }
+                }
+            }
+            composable(LocalArtistDestination.route) {
+                BackHandler {
+                    if (isSelecting) {
+                        if (isSearching) navVM.turnOffSearch()
+                        else navVM.endSelect()
+                    } else {
+                        if (isSearching) navVM.turnOffSearch()
+                        else onPopBackStack()
+                    }
+                }
+                val localArtistVM: LocalArtistVM = viewModel(factory = AppVMProvider.Factory)
+                val artist by localArtistVM.artist.collectAsStateWithLifecycle()
+                val alIsLoading by localArtistVM.localAudiosLoading.collectAsStateWithLifecycle()
+                var enabled by rememberSaveable { mutableStateOf(true) }
+                var audioPair by rememberSaveable {
+                    mutableStateOf(Pair<String?, String>(null, ""))
+                }
+                var showModal by rememberSaveable { mutableStateOf(false) }
+                WithDeleteModalAndLauncher(
+                    onResultOk = {
+                        coroutineScope.launch {
+                            onDelete(
+                                enabled, context, onToggle = { enabled = it }, audioPair, navVM
+                            )
+                        }
+                    }, onDismissRequest = { showModal = false },
+                    onDelete = {
+                        coroutineScope.launch {
+                            onTryDelete(
+                                enabled, context, audioPair = audioPair,
+                                onToggle = { t -> enabled = t },
+                                onDismissModal = { showModal = false },
+                                writeRequestLauncher = it,
+                                navVM = navVM
+                            )
+                        }
+                    }, string = audioPair.second.takeIf { str -> str.isNotEmpty() },
+                    showModal = showModal
+                ) { writeRequestLauncher ->
+                    artist?.let {
+                        LocalArtistView(
+                            it, enabled = !alIsLoading, getUIStyle = getUIStyle, vm = localArtistVM,
+                            onEdit = { str ->
+                                coroutineScope.launch { navVM.updateAudioUri(str) }
+                                onNavigate(EditAudioDestination.route)
+                            }, modifier = modifier,
+                            onAdd = { id ->
+                                coroutineScope.launch { navVM.toggleSong(id) }
+                                onNavigate(AddToPlDestination.route)
+                            },
+                            onDelete = { audio ->
+                                audioPair = Pair(audio.uri.toString(), audio.title)
+                                showModal = true
+                            }
+                        )
+                    }
+                }
+            }
+            composable(LocalBucketDestination.route) {
+                BackHandler {
+                    if (isSelecting) {
+                        if (isSearching) navVM.turnOffSearch()
+                        else navVM.endSelect()
+                    } else {
+                        if (isSearching) navVM.turnOffSearch()
+                        else onPopBackStack()
+                    }
+                }
+                var enabled by rememberSaveable { mutableStateOf(true) }
+                var audioPair by rememberSaveable {
+                    mutableStateOf(Pair<String?, String>(null, ""))
+                }
+                var showModal by rememberSaveable { mutableStateOf(false) }
+                val localBucketVM: LocalFolderVM = viewModel(factory = AppVMProvider.Factory)
+                val folder by localBucketVM.folder.collectAsStateWithLifecycle()
+                val alIsLoading by localBucketVM.localAudiosLoading.collectAsStateWithLifecycle()
+
+                WithDeleteModalAndLauncher(
+                    onResultOk = {
+                        coroutineScope.launch {
+                            onDelete(
+                                enabled, context, onToggle = { enabled = it }, audioPair, navVM
+                            )
+                        }
+                    }, onDismissRequest = { showModal = false },
+                    onDelete = {
+                        coroutineScope.launch {
+                            onTryDelete(
+                                enabled, context, audioPair = audioPair,
+                                onToggle = { t -> enabled = t },
+                                onDismissModal = { showModal = false },
+                                writeRequestLauncher = it,
+                                navVM = navVM
+                            )
+                        }
+                    }, string = audioPair.second.takeIf { str -> str.isNotEmpty() },
+                    showModal = showModal
+                ) { writeRequestLauncher ->
+                    folder?.let { f ->
+                        LocalFolderView(
+                            f, enabled = !alIsLoading, getUIStyle = getUIStyle, vm = localBucketVM,
+                            onEdit = { str ->
+                                coroutineScope.launch { navVM.updateAudioUri(str) }
+                                onNavigate(EditAudioDestination.route)
+                            }, modifier = modifier,
+                            onAdd = { id ->
+                                coroutineScope.launch { navVM.toggleSong(id) }
+                                onNavigate(AddToPlDestination.route)
+                            },
+                            onDelete = { audio ->
+                                audioPair = Pair(audio.uri.toString(), audio.title)
+                                showModal = true
+                            }
+                        )
+                    }
+                }
+            }
+            composable(LocalGenreDestination.route) {
+                BackHandler {
+                    if (isSelecting) {
+                        if (isSearching) navVM.turnOffSearch()
+                        else navVM.endSelect()
+                    } else {
+                        if (isSearching) navVM.turnOffSearch()
+                        else onPopBackStack()
+                    }
+                }
+                var enabled by rememberSaveable { mutableStateOf(true) }
+                var audioPair by rememberSaveable {
+                    mutableStateOf(Pair<String?, String>(null, ""))
+                }
+                var showModal by rememberSaveable { mutableStateOf(false) }
+                val localGenreVM: LocalGenreVM = viewModel(factory = AppVMProvider.Factory)
+                val alIsLoading by localGenreVM.localAudiosLoading.collectAsStateWithLifecycle()
+                val genre by localGenreVM.genre.collectAsStateWithLifecycle()
+                WithDeleteModalAndLauncher(
+                    onResultOk = {
+                        coroutineScope.launch {
+                            onDelete(
+                                enabled, context, onToggle = { enabled = it }, audioPair, navVM
+                            )
+                        }
+                    }, onDismissRequest = { showModal = false },
+                    onDelete = {
+                        coroutineScope.launch {
+                            onTryDelete(
+                                enabled, context, audioPair = audioPair,
+                                onToggle = { t -> enabled = t },
+                                onDismissModal = { showModal = false },
+                                writeRequestLauncher = it,
+                                navVM = navVM
+                            )
+                        }
+                    }, string = audioPair.second.takeIf { str -> str.isNotEmpty() },
+                    showModal = showModal
+                ) { writeRequestLauncher ->
+                    genre?.let { g ->
+                        LocalGenreView(
+                            g, enabled = !alIsLoading, getUIStyle = getUIStyle, vm = localGenreVM,
+                            onEdit = { str ->
+                                coroutineScope.launch { navVM.updateAudioUri(str) }
+                                onNavigate(EditAudioDestination.route)
+                            }, modifier = modifier,
+                            onAdd = { id ->
+                                coroutineScope.launch { navVM.toggleSong(id) }
+                                onNavigate(AddToPlDestination.route)
+                            },
+                            onDelete = { audio ->
+                                audioPair = Pair(audio.uri.toString(), audio.title)
+                                showModal = true
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private suspend fun onDelete(
+    enabled: Boolean, context: Context,
+    onToggle: (Boolean) -> Unit, audioPair: Pair<String?, String>, navVM: NavViewModel
+) {
+    if (!enabled) return
+    onToggle(false)
+    val pair = audioPair.takeIf { pair -> !pair.first.isNullOrBlank() }
+    if (pair == null) {
+        Toast.makeText(
+            context, "Null audio file", Toast.LENGTH_SHORT
+        ).show()
+        return
+    }
+    val result = navVM.deleteAudios(listOf(pair.first.toString()))
+    if (result !is DeleteResult.Success)
+        Toast.makeText(
+            context, "Failed to delete song", Toast.LENGTH_SHORT
+        ).show()
+    else Toast.makeText(
+        context, "Deleted ${pair.second}", Toast.LENGTH_SHORT
+    ).show()
+    onToggle(true)
+}
+
+private suspend fun onTryDelete(
+    enabled: Boolean, context: Context, onToggle: (Boolean) -> Unit,
+    audioPair: Pair<String?, String>, navVM: NavViewModel, onDismissModal: () -> Unit,
+    writeRequestLauncher: ManagedActivityResultLauncher<IntentSenderRequest, ActivityResult>
+) {
+    if (!enabled) return
+    onToggle(false)
+    val pair =
+        audioPair.takeIf { pair -> !pair.first.isNullOrBlank() }
+    if (pair == null) {
+        Toast.makeText(
+            context, "Null audio file", Toast.LENGTH_SHORT
+        ).show()
+        return
+    }
+    val result =
+        navVM.deleteAudios(listOf(pair.first.toString()))
+    when (val r = result) {
+        is DeleteResult.SecurityException ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                requestWritePermission(
+                    writeRequestLauncher,
+                    r.ex
+                )
+            }
+
+        is DeleteResult.Success -> Toast.makeText(
+            context,
+            "Deleted ${pair.second}",
+            Toast.LENGTH_SHORT
+        ).show()
+
+        else -> Toast.makeText(
+            context, "Failed to delete song", Toast.LENGTH_SHORT
+        ).show()
+    }
+    onToggle(true); onDismissModal()
+}
+
+@RequiresApi(Build.VERSION_CODES.Q)
+private fun requestWritePermission(
+    writeRequestLauncher: ManagedActivityResultLauncher<IntentSenderRequest, ActivityResult>,
+    ex: RecoverableSecurityException
+) {
+    val intentSender = ex.userAction.actionIntent.intentSender
+    writeRequestLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+}
+
+private fun requestWritePermission(
+    writeRequestLauncher: ManagedActivityResultLauncher<IntentSenderRequest, ActivityResult>,
+    intent: PendingIntent
+) {
+    writeRequestLauncher.launch(IntentSenderRequest.Builder(intent.intentSender).build())
+}
+
+private fun NavHostController.navigateAndRemoveFromStack(
+    route: String, popUpToRoute: String
+) = this.navigate(route) {
+    popUpTo(popUpToRoute) { inclusive = true }
+    launchSingleTop = true
+}
