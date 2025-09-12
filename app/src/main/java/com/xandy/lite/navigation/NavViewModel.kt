@@ -17,6 +17,7 @@ import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Playlist
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.ui.AudioUIState
+import com.xandy.lite.models.ui.LocalAudioStates
 import com.xandy.lite.models.ui.order.by.PlaylistOrder
 import com.xandy.lite.models.ui.order.by.SongOrder
 import com.xandy.lite.models.ui.order.by.reverseSort
@@ -26,6 +27,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -61,7 +63,6 @@ class NavViewModel(
         initialValue = Player.REPEAT_MODE_OFF
     )
     val isSelecting = uiRepository.isSelecting
-    val selectedSongIds = uiRepository.selectedSongIds
     val isAdding = uiRepository.isAdding
     val query = uiRepository.query
     val querySet = uiRepository.recentQueries.stateIn(
@@ -70,7 +71,8 @@ class NavViewModel(
     )
 
     fun updateRoute(r: String) = _route.update {
-        savedStateHandle[ROUTE] = r; r }.also { Log.i(XANDY_CLOUD, "Route : $r") }
+        savedStateHandle[ROUTE] = r; r
+    }.also { Log.i(XANDY_CLOUD, "Route : $r") }
 
     fun turnOnSearch() = uiRepository.turnOnSearch()
     fun turnOffSearch() = uiRepository.turnOffSearch()
@@ -115,9 +117,8 @@ class NavViewModel(
     fun startAdding(songs: List<AudioFile>) = uiRepository.startAdding(songs)
     fun endSelect() = uiRepository.endSelect()
 
-    /*
-    *               <-- Local audio files -->
-    */
+    fun getSelectedSongIds() = uiRepository.selectedSongIds.value
+
     val percentFetched = songRepository.percentFetched
     val audioFiles = songRepository.audioFiles.stateIn(
         scope = viewModelScope, started = SharingStarted.Eagerly,
@@ -142,11 +143,38 @@ class NavViewModel(
 
     val localTab = songRepository.localTab
     val selectedFolders = uiRepository.selectedBuckets
-    val localAudiosLoading = songRepository.filesLoading
     private val _audioOrderedBy = songRepository.audioOrderedBy
     val alDirection = getSlOrderedBy(viewModelScope, _audioOrderedBy, TIMEOUT_MILLIS)
     private val _localPlsOrderedBy = songRepository.localPlsOrderedBy
     val localPlsDirection = getPlsOrderedBy(viewModelScope, _localPlsOrderedBy, TIMEOUT_MILLIS)
+
+    /** First: isSearching, Second: isSelecting, Third: localAudiosLoading */
+    private val uiStates =
+        combine(
+            isSearching, isSelecting, songRepository.filesLoading,
+            songRepository.autoUpdate
+        ) { searching, selecting, loading, autoUpdate ->
+            UiStates(searching, selecting, loading, autoUpdate)
+        }
+    val audioStates = combine(
+        uiStates, localTab, localPlsDirection, alDirection, percentFetched
+    ) { t, tab, plDir, alDir, percent ->
+        LocalAudioStates(
+            isSearching = t.isSearching, isSelecting = t.isSelecting, tab = tab,
+            isLoading = t.localAudiosLoading, plsDirection = plDir, alDirection = alDir,
+            percent = percent, autoUpdate = t.autoUpdate
+        )
+    }.stateIn(
+        viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+        initialValue = LocalAudioStates(
+            isSearching = isSearching.value, isSelecting = isSelecting.value,
+            tab = localTab.value, isLoading = songRepository.filesLoading.value,
+            plsDirection = localPlsDirection.value, alDirection = alDirection.value,
+            percent = percentFetched.value, autoUpdate = songRepository.autoUpdateEnabled()
+        )
+    )
+
+    fun toggleAutoUpdate(enabled: Boolean) = songRepository.toggleAutoUpdate(enabled)
 
     fun updateAudioUri(uri: String) = audioUri.update {
         savedStateHandle[LOCAL_AUDIO_URI] = uri; uri
@@ -205,6 +233,9 @@ class NavViewModel(
     suspend fun hideFolders(set: Set<Pair<String, Long>>) = songRepository.hideBuckets(set)
 
     suspend fun hideAudios(uris: List<String>) = songRepository.hideAudioFiles(uris)
+
+    suspend fun showAudios(uris: List<String>) = songRepository.showAudioFiles(uris)
+
     suspend fun deleteAudios(uris: List<String>) =
         songRepository.deleteLocalAudios(uris.map { it.toUri() })
 
@@ -218,4 +249,14 @@ class NavViewModel(
 
 
     fun getMediaController() = songRepository.getMediaController()
+
+    init {
+        if (songRepository.autoUpdateEnabled()) viewModelScope.launch { updateAudioFiles() }
+    }
 }
+
+
+private data class UiStates(
+    val isSearching: Boolean, val isSelecting: Boolean, val localAudiosLoading: Boolean,
+    val autoUpdate: Boolean
+)

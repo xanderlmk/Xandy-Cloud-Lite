@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,11 +35,14 @@ import com.xandy.lite.models.ui.ShowModalFor
 import com.xandy.lite.ui.functions.DeleteModal
 import com.xandy.lite.ui.functions.SelectImageModal
 import com.xandy.lite.ui.functions.item.details.Artwork
+import com.xandy.lite.ui.theme.GetUIStyle
+import my.nanihadesuka.compose.LazyColumnScrollbar
+import my.nanihadesuka.compose.ScrollbarSettings
 
 
 @Composable
 fun ImagePicker(
-    artworkList: List<Uri>, isLandscape: Boolean,
+    artworkList: List<Uri>, isLandscape: Boolean, getUIStyle: GetUIStyle,
     onImagePicked: (Uri) -> Unit, showModal: ShowModalFor, onDismiss: () -> Unit
 ) {
     var showDialog by rememberSaveable { mutableStateOf(false) }
@@ -50,21 +54,22 @@ fun ImagePicker(
     SelectImageModal(
         onDismissRequest = onDismiss, show = showModal !is ShowModalFor.Idle,
         onSelectLocal = { showDialog = true },
-        onSelectGallery = { launcher.launch("image/*") }
+        onSelectGallery = { launcher.launch("image/*") },
+        localEnabled = artworkList.isNotEmpty()
     )
     LocalArtwork(
         onDismissRequest = { showDialog = false },
         onSelect = { showDialog = false; onImagePicked(it) },
-        list = artworkList, showDialog = showDialog, isLandscape = isLandscape
+        list = artworkList, showDialog = showDialog, isLandscape = isLandscape,
+        getUIStyle = getUIStyle
     )
 }
 
 @Composable
 private fun LocalArtwork(
     onDismissRequest: () -> Unit, onSelect: (Uri) -> Unit, list: List<Uri>,
-    showDialog: Boolean, isLandscape: Boolean
+    showDialog: Boolean, isLandscape: Boolean, getUIStyle: GetUIStyle
 ) {
-
     val rows = list.chunked(if (isLandscape) 4 else 2)
     if (showDialog) {
         if (isLandscape) {
@@ -72,28 +77,39 @@ private fun LocalArtwork(
                 onDismissRequest = onDismissRequest,
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.75f),
-                    contentPadding = PaddingValues(4.dp)
+                val state = rememberLazyListState()
+                LazyColumnScrollbar(
+                    state = state,
+                    settings = ScrollbarSettings(
+                        thumbSelectedColor = getUIStyle.selectedThumbColor(),
+                        thumbUnselectedColor = getUIStyle.unSelectedThumbColor()
+                    )
                 ) {
-                    items(rows) { rowItems ->
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            rowItems.forEach { image ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .aspectRatio(1f)
-                                        .padding(2.dp)
-                                ) {
-                                    Artwork(image, Modifier.clickable { onSelect(image) })
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.75f),
+                        contentPadding = PaddingValues(4.dp), state = state
+                    ) {
+                        items(rows) { rowItems ->
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                rowItems.forEach { image ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .padding(2.dp)
+                                    ) {
+                                        Artwork(
+                                            image, LocalContext.current,
+                                            Modifier.clickable { onSelect(image) })
+                                    }
                                 }
-                            }
-                            when (rowItems.size) {
-                                1 -> Spacer(modifier = Modifier.weight(3f))
-                                2 -> Spacer(modifier = Modifier.weight(2f))
-                                3 -> Spacer(modifier = Modifier.weight(1f))
+                                when (rowItems.size) {
+                                    1 -> Spacer(modifier = Modifier.weight(3f))
+                                    2 -> Spacer(modifier = Modifier.weight(2f))
+                                    3 -> Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
@@ -101,26 +117,37 @@ private fun LocalArtwork(
             }
         } else {
             Dialog(onDismissRequest = onDismissRequest) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.90f),
-                    contentPadding = PaddingValues(4.dp)
+                val state = rememberLazyListState()
+                LazyColumnScrollbar(
+                    state = state,
+                    settings = ScrollbarSettings(
+                        thumbSelectedColor = getUIStyle.selectedThumbColor(),
+                        thumbUnselectedColor = getUIStyle.unSelectedThumbColor()
+                    )
                 ) {
-                    items(rows) { rowItems ->
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            rowItems.forEach { image ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .aspectRatio(1f)
-                                        .padding(2.dp)
-                                ) {
-                                    Artwork(image, Modifier.clickable { onSelect(image) })
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.90f),
+                        contentPadding = PaddingValues(4.dp), state = state
+                    ) {
+                        items(rows) { rowItems ->
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                rowItems.forEach { image ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .padding(2.dp)
+                                    ) {
+                                        Artwork(
+                                            image, LocalContext.current,
+                                            Modifier.clickable { onSelect(image) })
+                                    }
                                 }
-                            }
-                            if (rowItems.size == 1) {
-                                Spacer(modifier = Modifier.weight(1f))
+                                if (rowItems.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }

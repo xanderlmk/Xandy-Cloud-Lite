@@ -43,6 +43,9 @@ interface AudioDao {
     @Query("""UPDATE local_audio SET hidden = 1, permanentlyHidden = 1 WHERE song_id IN (:ids)""")
     suspend fun hideAudioFiles(ids: List<String>)
 
+    @Query("""UPDATE local_audio SET hidden = 0, permanentlyHidden = 0 WHERE song_id in (:ids)""")
+    suspend fun showAudioFiles(ids: List<String>)
+
     @Query("""UPDATE local_audio SET hidden = 1, permanentlyHidden = 1 WHERE song_id = :uri""")
     suspend fun hideAudioFile(uri: String)
 
@@ -169,7 +172,6 @@ interface AudioDao {
         """
     )
     fun getFlowOfSongsWithPlsByArtistDESC(): Flow<List<AudioWithPls>>
-
 
 
     @Query(

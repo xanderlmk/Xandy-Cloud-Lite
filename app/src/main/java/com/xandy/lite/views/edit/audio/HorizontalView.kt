@@ -32,12 +32,13 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xandy.lite.R
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.ui.theme.GetUIStyle
 
 
 @Composable
 fun HorizontalEditAudioView(
     audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean,
-    onUpdate: (AudioFile) -> Unit, allMediaArtwork: List<Uri>
+    onUpdate: (AudioFile) -> Unit, allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle
 ) {
     Box(
         modifier = Modifier.fillMaxSize()
@@ -114,7 +115,9 @@ fun HorizontalEditAudioView(
                     .padding(6.dp),
                 contentScale = ContentScale.Crop
             )
-            ImagePicker(allMediaArtwork, enabled, isLandscape = true) { picture ->
+            ImagePicker(
+                allMediaArtwork, enabled, isLandscape = true, getUIStyle = getUIStyle
+            ) { picture ->
                 onAudioChange(audio.copy(picture = picture))
             }
             Spacer(Modifier.padding(vertical = 15.dp))

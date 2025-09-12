@@ -47,16 +47,37 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
 
     @Composable
     fun ContentIcon(
-        icon: ImageVector,
-        cd: String? = null,
-        modifier: Modifier = Modifier,
-        tint: Color
+        icon: ImageVector, cd: String? = null, modifier: Modifier = Modifier, tint: Color
     ) {
         Icon(
             imageVector = icon,
             modifier = modifier,
             contentDescription = cd,
             tint = tint
+        )
+    }
+
+    @Composable
+    fun ContentIcon(
+        icon: ImageVector, cd: String? = null, modifier: Modifier = Modifier, enabled: Boolean
+    ) {
+        Icon(
+            imageVector = icon,
+            modifier = modifier,
+            contentDescription = cd,
+            tint = if (enabled) getUIStyle.themedColor() else getUIStyle.disabledThemedColor()
+        )
+    }
+
+    @Composable
+    fun ContentIcon(
+        icon: Painter, cd: String? = null, modifier: Modifier = Modifier, enabled: Boolean
+    ) {
+        Icon(
+            painter = icon,
+            modifier = modifier,
+            contentDescription = cd,
+            tint = if (enabled) getUIStyle.themedColor() else getUIStyle.disabledThemedColor()
         )
     }
 

@@ -1,4 +1,4 @@
-package com.xandy.cloud.ui.functions.item.details
+package com.xandy.lite.ui.functions.item.details
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
@@ -44,7 +45,6 @@ import com.xandy.lite.models.ui.order.by.SongOrder
 import com.xandy.lite.models.ui.order.by.reverseSort
 import com.xandy.lite.models.ui.order.by.toOrderedByClass
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.theme.GetUIStyle
 import androidx.media3.session.R as AndroidR
 
@@ -65,7 +65,9 @@ fun PlaylistRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        if (pl.playlist.picture != null) Artwork(pl.playlist.picture, Modifier.size(50.dp))
+        if (pl.playlist.picture != null) Artwork(
+            pl.playlist.picture, LocalContext.current, Modifier.size(50.dp)
+        )
         else Artwork(Modifier.size(50.dp))
         Text(
             pl.playlist.name, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth(.8f),
@@ -109,7 +111,7 @@ fun PlaylistRow(pl: Playlist, getUIStyle: GetUIStyle, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start
     ) {
-        if (pl.picture != null) Artwork(pl.picture, Modifier.size(50.dp))
+        if (pl.picture != null) Artwork(pl.picture, LocalContext.current, Modifier . size (50.dp))
         else Artwork(Modifier.size(50.dp))
         Text(pl.name, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
@@ -118,7 +120,7 @@ fun PlaylistRow(pl: Playlist, getUIStyle: GetUIStyle, onClick: () -> Unit) {
 @Composable
 fun PlaylistOrderRow(
     order: OrderSongsBy, ci: ContentIcons, onUpdate: (OrderSongsBy) -> Unit, onShuffle: () -> Unit,
-    onPlay: () -> Unit, isPlaying: Boolean
+    onPlay: () -> Unit, isPlaying: Boolean, enabled: Boolean
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val icon =
@@ -156,11 +158,14 @@ fun PlaylistOrderRow(
                 )
             }
             Row {
-                IconButton(onClick = onShuffle) {
-                    ci.ContentIcon(painterResource(AndroidR.drawable.media3_icon_shuffle_on))
+                IconButton(onClick = onShuffle, enabled = enabled) {
+                    ci.ContentIcon(
+                        painterResource(AndroidR.drawable.media3_icon_shuffle_on),
+                        enabled = enabled
+                    )
                 }
-                IconButton(onClick = onPlay) {
-                    ci.ContentIcon(icon)
+                IconButton(onClick = onPlay, enabled = enabled) {
+                    ci.ContentIcon(icon, enabled = enabled)
                 }
             }
         }

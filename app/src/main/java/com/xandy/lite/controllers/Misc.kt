@@ -29,10 +29,12 @@ import com.xandy.lite.models.ui.order.by.OrderQueueBy
 import com.xandy.lite.models.ui.order.by.OrderSongsBy
 import com.xandy.lite.models.ui.order.by.isAscending
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.io.File
@@ -158,7 +160,7 @@ fun combineMCWithPickedSong(
         Log.i("Xandy-Cloud", "$sd")
         sd
     }
-}
+}.flowOn(Dispatchers.Main.limitedParallelism(1, "Song Details"))
 
 private fun combineSongWithMediaMetadata(
     song: AudioFile?, item: MediaMetadata?, unknownTrackUri: Uri, id: String

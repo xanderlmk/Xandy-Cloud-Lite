@@ -8,7 +8,6 @@ import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Bucket
 import com.xandy.lite.db.tables.Playlist
-import com.xandy.lite.models.ui.AudioUIState
 import com.xandy.lite.models.ui.LocalMediaStates
 import com.xandy.lite.models.ui.LocalMusicTabs
 import com.xandy.lite.navigation.UIRepository
@@ -21,13 +20,9 @@ class LocalMediaVM(
     private val songRepository: SongRepository, private val uiRepository: UIRepository
 ) : ViewModel() {
     companion object {
-        private const val TIMEOUT_MILLIS = 5_000L
+        private const val TIMEOUT_MILLIS = 4_000L
     }
 
-    val audioFiles = songRepository.audioFiles.stateIn(
-        scope = viewModelScope, started = SharingStarted.Eagerly,
-        initialValue = AudioUIState()
-    )
     val folders = songRepository.bucketsWithAudio.stateIn(
         scope = viewModelScope, started = SharingStarted.Eagerly,
         initialValue = emptyList()
@@ -47,7 +42,8 @@ class LocalMediaVM(
             artists = mt.second, genres = mt.third, folders = bwa
         )
     }.stateIn(
-        scope = viewModelScope, started = SharingStarted.Lazily, initialValue = LocalMediaStates()
+        scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+        initialValue = LocalMediaStates()
     )
     val mediaController = songRepository.mediaController
     val tab = songRepository.localTab.stateIn(

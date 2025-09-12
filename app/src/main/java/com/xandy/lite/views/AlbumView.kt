@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,7 +73,7 @@ fun LocalAlbumView(
             .padding(top = 4.dp), selectedSongSet = selectedSongSet,
         topContent = {
             item {
-                Artwork(album.picture, pictureModifier)
+                Artwork(album.picture, LocalContext.current, pictureModifier)
                 Text(
                     text = album.name,
                     style = MaterialTheme.typography.displayLarge, fontSize = 20.sp,

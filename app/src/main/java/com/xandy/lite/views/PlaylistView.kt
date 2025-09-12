@@ -15,10 +15,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.xandy.cloud.ui.functions.item.details.PlaylistOrderRow
+import com.xandy.lite.ui.functions.item.details.PlaylistOrderRow
 import com.xandy.lite.controllers.view.models.LocalPLVM
 import com.xandy.lite.models.ui.PlaylistWithCount
 import com.xandy.lite.ui.functions.ContentIcons
@@ -78,6 +79,8 @@ fun LocalPlaylistView(
             .fillMaxWidth()
             .padding(top = 4.dp)
     ) {
+        val selectedSongSet = selectedSongIds.toSet()
+
         if (!isAdding) {
             LazyColumn(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -86,7 +89,7 @@ fun LocalPlaylistView(
             ) {
                 item {
                     val picture = songsInPL.playlist.picture
-                    if (picture != null) Artwork(picture, pictureModifier)
+                    if (picture != null) Artwork(picture, LocalContext.current, pictureModifier)
                     else Artwork(pictureModifier)
                     Text(
                         text = "${songsInPL.songCount} tracks",
@@ -118,12 +121,18 @@ fun LocalPlaylistView(
                                 else
                                     if (isPlaying) controller?.pause() else controller?.play()
                             }
-                        }, isPlaying = (isPlaying && pickedQueueName == name)
+                        }, isPlaying = (isPlaying && pickedQueueName == name),
+                        enabled = !isSearching
                     )
                 }
 
-                val selectedSongSet = selectedSongIds.toSet()
-                items(songsInPL.songs, key = { it.data.uri.toString() }) { song ->
+                val filtered = songsInPL.songs.filter { audio ->
+                    if (query.isBlank() || !isSearching) return@filter true
+                    audio.data.title.contains(query, ignoreCase = true) ||
+                            audio.data.artist.contains(query, ignoreCase = true)
+                }
+
+                items(filtered, key = { it.data.uri.toString() }) { song ->
                     val selected = song.data.uri.toString() in selectedSongSet
                     SongRow(
                         song.data, getUIStyle, isSelecting = isSelecting, isSelected = selected,
@@ -144,7 +153,7 @@ fun LocalPlaylistView(
                                     playlistId = songsInPL.playlist.name
                                 )
                             }
-                        },
+                        }, context = LocalContext.current,
                         onEdit = { onEditSong(song.data.uri.toString()) },
                         onAdd = { onAdd(song.data.uri.toString()) }
                     )

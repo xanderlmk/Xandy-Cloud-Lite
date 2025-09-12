@@ -1,5 +1,6 @@
 package com.xandy.lite.ui.functions.item.details
 
+import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,7 +39,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -57,10 +58,9 @@ import com.xandy.lite.ui.theme.GetUIStyle
 fun SongRow(
     song: AudioFile, getUIStyle: GetUIStyle, onClick: () -> Unit, onLongPress: () -> Unit,
     onDelete: () -> Unit, onEdit: () -> Unit, onToggleHide: () -> Unit = {}, onAdd: () -> Unit,
-    isSelecting: Boolean, isSelected: Boolean, enabled: Boolean,
+    isSelecting: Boolean, isSelected: Boolean, enabled: Boolean, context: Context,
     hideAllowed: Pair<Boolean, String> = Pair(false, "")
 ) {
-    val context = LocalContext.current
     val ci = ContentIcons(getUIStyle)
     Row(
         Modifier
@@ -82,7 +82,7 @@ fun SongRow(
                 else painterResource(R.drawable.outline_square)
             )
         }
-        Artwork(song.picture.toString(), Modifier.size(50.dp))
+        Artwork(song.picture.toString(), context, Modifier.size(50.dp))
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
@@ -159,7 +159,13 @@ fun SongRow(
 
 
 @Composable
-fun SongRow(song: AudioFile, getUIStyle: GetUIStyle, isPickedSong: Boolean, onClick: () -> Unit) {
+fun SongRow(
+    song: AudioFile,
+    getUIStyle: GetUIStyle,
+    isPickedSong: Boolean,
+    context: Context,
+    onClick: () -> Unit
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -172,10 +178,7 @@ fun SongRow(song: AudioFile, getUIStyle: GetUIStyle, isPickedSong: Boolean, onCl
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start
     ) {
-        Artwork(
-            song.picture.toString(),
-            Modifier.size(50.dp)
-        )
+        Artwork(song.picture.toString(), context, Modifier.size(50.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.Start,
@@ -204,12 +207,10 @@ fun SongRow(song: AudioFile, getUIStyle: GetUIStyle, isPickedSong: Boolean, onCl
 }
 
 @Composable
-fun Artwork(data: Any, modifier: Modifier = Modifier) {
+fun Artwork(data: Any, context: Context, modifier: Modifier = Modifier) {
+    val image = remember(data) { ImageRequest.Builder(context).data(data).build() }
     AsyncImage(
-        model = ImageRequest.Builder(LocalContext.current)
-            .data(data)
-            .crossfade(true)
-            .build(),
+        model = image,
         contentDescription = "Album art",
         placeholder = painterResource(R.drawable.unknown_track),
         error = painterResource(R.drawable.unknown_track),

@@ -120,6 +120,9 @@ interface SongRepository {
     /** Permanently hide selected audio files. */
     suspend fun hideAudioFiles(uris: List<String>): Boolean
 
+    /** Show the hidden audio files */
+    suspend fun showAudioFiles(uris: List<String>): Boolean
+
     /** Permanently hide the selected audio file */
     suspend fun hideAudioFile(uri: String): Boolean
 
@@ -136,4 +139,8 @@ interface SongRepository {
     fun updateQueueOrder(orderQueueBy: OrderQueueBy)
 
     suspend fun changePlaylistName(newName: String, name: String): InsertResult
+
+    fun autoUpdateEnabled(): Boolean
+    fun toggleAutoUpdate(enabled: Boolean)
+    val autoUpdate : StateFlow<Boolean>
 }

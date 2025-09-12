@@ -23,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.xandy.cloud.ui.functions.item.details.PlaylistRow
+import com.xandy.lite.ui.functions.item.details.PlaylistRow
 import com.xandy.lite.controllers.view.models.AddToLocalPlVM
 import com.xandy.lite.ui.functions.AddPlDialog
 import com.xandy.lite.ui.functions.ContentIcons

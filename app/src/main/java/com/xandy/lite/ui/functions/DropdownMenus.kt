@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
@@ -28,8 +29,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,7 +52,7 @@ fun LocalAudioOptions(
     onUpdateSongOrder: (SongOrder) -> Unit, onReversePlsOrder: () -> Unit,
     onUpdatePlsOrder: (PlaylistOrder) -> Unit, onSearch: () -> Unit, onHideAudios: () -> Unit,
     onHideFolders: () -> Unit, onAddSongs: () -> Unit, onShareSongs: () -> Unit,
-    getUIStyle: GetUIStyle
+    onShowAudios: () -> Unit,onToggleAutoUpdate: () -> Unit, getUIStyle: GetUIStyle
 ) {
     val ci = ContentIcons(getUIStyle)
 
@@ -57,7 +60,10 @@ fun LocalAudioOptions(
         SearchIconButton(ci) { onSearch() }
         if (!audioStates.isSelecting) {
             ci.PercentRefreshButon(
-                audioStates.isLoading, percentage = audioStates.percent, onClick = onRefresh, getUIStyle.themedColor()
+                audioStates.isLoading,
+                percentage = audioStates.percent,
+                onClick = onRefresh,
+                getUIStyle.themedColor()
             )
         }
     }
@@ -67,11 +73,13 @@ fun LocalAudioOptions(
             if (!audioStates.isSelecting) AllSongOptions(
                 onReverseSongOrder = onReverseSongOrder,
                 onUpdateSongOrder = onUpdateSongOrder,
-                getUIStyle = getUIStyle, asc = audioStates.alDirection
+                getUIStyle = getUIStyle, asc = audioStates.alDirection,
+                onToggleAutoUpdate = onToggleAutoUpdate,
+                autoUpdateEnabled = audioStates.autoUpdate
             )
             else EditSongOptions(
-                onHide = onHideAudios, onAddSongs, onShareSongs = onShareSongs,
-                getUIStyle = getUIStyle
+                onHideOrShow = onHideAudios, onAddSongs = onAddSongs, onShareSongs = onShareSongs,
+                getUIStyle = getUIStyle, hide = true
             )
 
         }
@@ -95,19 +103,21 @@ fun LocalAudioOptions(
         }
 
         LocalMusicTabs.FOLDERS -> {
-            if (audioStates.isSelecting) {
-                Text(
-                    text = "Hide",
-                    modifier = Modifier
-                        .padding(start = 2.dp, end = 4.dp)
-                        .clickable(enabled = !audioStates.isLoading) { onHideFolders() },
-                    color = getUIStyle.tabTextColor(!audioStates.isLoading)
-                )
-            }
+            if (audioStates.isSelecting) Text(
+                text = "Hide",
+                modifier = Modifier
+                    .padding(start = 2.dp, end = 4.dp)
+                    .clickable(enabled = !audioStates.isLoading) { onHideFolders() },
+                color = getUIStyle.tabTextColor(!audioStates.isLoading)
+            )
         }
 
         LocalMusicTabs.HIDDEN -> {
-
+            if (audioStates.isSelecting) EditSongOptions(
+                onHideOrShow = onShowAudios, onAddSongs = onAddSongs,
+                onShareSongs = onShareSongs, getUIStyle = getUIStyle,
+                hide = false
+            )
         }
     }
 }
@@ -120,7 +130,6 @@ fun PlayListOptions(
     val ci = ContentIcons(getUIStyle)
     val coroutineScope = rememberCoroutineScope()
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val selectedSongIds by navVM.selectedSongIds.collectAsStateWithLifecycle()
     val plWithAudio by navVM.plWithAudio.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val isSelecting by navVM.isSelecting.collectAsStateWithLifecycle()
@@ -131,7 +140,7 @@ fun PlayListOptions(
             coroutineScope.launch {
                 result(
                     id = plWithAudio?.playlist?.name,
-                    onResult = { navVM.addLocalSongsToPL(selectedSongIds, it) },
+                    onResult = { navVM.addLocalSongsToPL(navVM.getSelectedSongIds(), it) },
                     onEndSelect = { navVM.endSelect() },
                     context = context, failureText = "Failed to add songs"
                 )
@@ -141,8 +150,8 @@ fun PlayListOptions(
             coroutineScope.launch {
                 result(
                     id = plWithAudio?.playlist?.name,
-                    onResult = { navVM.removeLocalSongsFromPL(selectedSongIds, it) },
-                    onEndSelect = { navVM.endSelect() },
+                    onResult = { navVM.removeLocalSongsFromPL(navVM.getSelectedSongIds(), it) },
+                    onEndSelect = { navVM.endSelect(); expanded = false },
                     context = context, failureText = "Failed to remove songs"
                 )
 
@@ -201,6 +210,7 @@ private fun PLContent(
             }
         }
     } else {
+        SearchIconButton(ci) { onSearch() }
         AddIconButton(ci) { onAdd() }
         Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
             IconButton(
@@ -226,13 +236,13 @@ private fun PLContent(
 }
 
 @Composable
-fun AllSongOptions(
+private fun AllSongOptions(
     onReverseSongOrder: () -> Unit, onUpdateSongOrder: (SongOrder) -> Unit, getUIStyle: GetUIStyle,
-    asc: Boolean
+    asc: Boolean, onToggleAutoUpdate: () -> Unit, autoUpdateEnabled: Boolean
 ) {
     val ci = ContentIcons(getUIStyle)
     var expanded by rememberSaveable { mutableStateOf(false) }
-
+    val text = if (autoUpdateEnabled) "Auto-Update Enabled" else "Auto-Update Disabled"
     SortingOptionsForML(
         expanded = expanded, ci = ci, asc = asc,
         onReverseOrder = onReverseSongOrder,
@@ -249,6 +259,9 @@ fun AllSongOptions(
         DropdownMenuItem(
             text = { Text("Created Date") },
             onClick = { onUpdateSongOrder(SongOrder.CreatedOn) }
+        )
+        DropdownMenuItem(
+            text = { Text(text) }, onClick = onToggleAutoUpdate
         )
     }
 }
@@ -281,14 +294,19 @@ fun AllPLsOptions(
 
 
 @Composable
-fun EditSongOptions(
-    onHide: () -> Unit,
+private fun EditSongOptions(
+    hide: Boolean,
+    onHideOrShow: () -> Unit,
     onAddSongs: () -> Unit,
     onShareSongs: () -> Unit,
     getUIStyle: GetUIStyle
 ) {
     val ci = ContentIcons(getUIStyle)
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val icon =
+        if (hide) ImageVector.vectorResource(R.drawable.sharp_hide_source)
+        else Icons.Default.CheckCircle
+    val text = if (hide) "Hide" else "Show"
     Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
         IconButton(onClick = { expanded = !expanded }) {
             ci.ContentIcon(Icons.Default.MoreVert)
@@ -300,9 +318,9 @@ fun EditSongOptions(
                 onClick = onAddSongs
             )
             DropdownMenuItem(
-                text = { Text("Hide") },
-                trailingIcon = { ci.ContentIcon(painterResource(R.drawable.sharp_hide_source)) },
-                onClick = onHide
+                text = { Text(text) },
+                trailingIcon = { ci.ContentIcon(icon) },
+                onClick = onHideOrShow
 
             )
             DropdownMenuItem(
@@ -348,19 +366,28 @@ fun RecentQueries(
     onToggle: () -> Unit, onDismiss: () -> Unit, ci: ContentIcons
 ) {
     val icon = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown
-    Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
+    Box(
+        modifier = Modifier
+            .wrapContentSize(Alignment.TopEnd)
+    ) {
         IconButton(onClick = onToggle) { ci.ContentIcon(icon) }
-        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenu(
+            expanded = expanded, onDismissRequest = onDismiss,
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+        ) {
             if (querySet.isEmpty()) Text(
                 text = "No Recent Queries",
                 modifier = Modifier.padding(4.dp),
                 style = MaterialTheme.typography.bodyMedium
             )
-            else querySet.forEach {
+            else querySet.forEachIndexed { index, it ->
                 DropdownMenuItem(
                     text = { Text(it) },
                     onClick = { updateQuery(it) }
                 )
+                if (index != querySet.indices.last)
+                    HorizontalDivider()
             }
         }
     }

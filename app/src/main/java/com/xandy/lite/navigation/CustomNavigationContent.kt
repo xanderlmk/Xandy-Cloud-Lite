@@ -43,7 +43,6 @@ import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.LocalAudioOptions
 import com.xandy.lite.ui.functions.PlayListOptions
 import com.xandy.lite.ui.functions.SearchTextField
-import com.xandy.lite.ui.functions.collectLocalAudioStateWithLifecycle
 import com.xandy.lite.ui.theme.GetUIStyle
 import com.xandy.lite.views.player.controller.PlayerController
 import kotlinx.coroutines.delay
@@ -79,8 +78,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
         var showRenamePlDialog by rememberSaveable { mutableStateOf(false) }
         val plWithAudio by navVM.plWithAudio.collectAsStateWithLifecycle()
         val selectedFolders by navVM.selectedFolders.collectAsStateWithLifecycle()
-        val localAudioStates = collectLocalAudioStateWithLifecycle(navVM)
-        val selectedSongIds by navVM.selectedSongIds.collectAsStateWithLifecycle()
+        val audioStates by navVM.audioStates.collectAsStateWithLifecycle()
         val context = LocalContext.current
         var showImageModal by rememberSaveable { mutableStateOf<ShowModalFor>(ShowModalFor.Idle) }
         val localArtwork by navVM.artworkList.collectAsStateWithLifecycle()
@@ -103,7 +101,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                             !isSearching
                         ) {
                             Text(
-                                text = name,
+                                text = name, textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -128,7 +126,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                         when (route) {
                             LocalMusicDestination.route -> {
                                 LocalAudioOptions(
-                                    audioStates = localAudioStates, getUIStyle = getUIStyle,
+                                    audioStates = audioStates, getUIStyle = getUIStyle,
                                     onRefresh = {
                                         coroutineScope.launch { navVM.updateAudioFiles() }
                                     },
@@ -139,10 +137,22 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                     onReversePlsOrder = { navVM.reverseLocalPlsOrder() },
                                     onHideAudios = {
                                         coroutineScope.launch {
+                                            val selectedSongIds = navVM.getSelectedSongIds()
                                             val result = navVM.hideAudios(selectedSongIds)
                                             if (!result) Toast.makeText(
                                                 context,
                                                 "Failed to hide songs", Toast.LENGTH_SHORT
+                                            ).show()
+                                            else navVM.endSelect()
+                                        }
+                                    },
+                                    onShowAudios = {
+                                        coroutineScope.launch {
+                                            val selectedSongIds = navVM.getSelectedSongIds()
+                                            val result = navVM.showAudios(selectedSongIds)
+                                            if (!result) Toast.makeText(
+                                                context,
+                                                "Failed to unhide songs", Toast.LENGTH_SHORT
                                             ).show()
                                             else navVM.endSelect()
                                         }
@@ -158,19 +168,23 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                         }
                                     },
                                     onAddSongs = { onNavigate(AddToPlDestination.route) },
-                                    onShareSongs = { shareMultipleAudios(context, selectedSongIds) }
+                                    onShareSongs = {
+                                        val selectedSongIds = navVM.getSelectedSongIds()
+                                        shareMultipleAudios(context, selectedSongIds)
+                                    },
+                                    onToggleAutoUpdate = {
+                                        navVM.toggleAutoUpdate(!audioStates.autoUpdate)
+                                    }
                                 )
                             }
 
                             LocalPlDestination.route -> {
-                                if (!isSearching) {
-                                    PlayListOptions(
-                                        navVM, getUIStyle,
-                                        onChangeArt = { showImageModal = ShowModalFor.LocalPl },
-                                        onSearch = { navVM.turnOnSearch() },
-                                        onChangeName = { showRenamePlDialog = true }
-                                    )
-                                }
+                                if (!isSearching) PlayListOptions(
+                                    navVM, getUIStyle,
+                                    onChangeArt = { showImageModal = ShowModalFor.LocalPl },
+                                    onSearch = { navVM.turnOnSearch() },
+                                    onChangeName = { showRenamePlDialog = true }
+                                )
                             }
 
                         }
@@ -187,6 +201,21 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                 route?.let { navVM.updateRoute(it) }
                                 navVM.stopCheckingPosition()
                                 mainNavController.popBackStack()
+                            }) {
+                                ci.ContentIcon(Icons.Default.KeyboardArrowDown)
+                            }
+                        } else if (
+                            route == LocalPlDestination.route && !isSearching && !isSelecting
+                        ) {
+                            IconButton(onClick = {
+                                val route =
+                                    mainNavController.previousBackStackEntry?.destination?.route
+                                if (route != null) {
+                                    navVM.updateRoute(route); mainNavController.popBackStack()
+                                } else {
+                                    val new = LocalMusicDestination.route
+                                    navVM.updateRoute(new); mainNavController.navigate(new)
+                                }
                             }) {
                                 ci.ContentIcon(Icons.Default.KeyboardArrowDown)
                             }
@@ -280,7 +309,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
 
                         }
                     },
-                    showModal = showImageModal,
+                    showModal = showImageModal, getUIStyle = getUIStyle,
                     onDismiss = { showImageModal = ShowModalFor.Idle }
                 )
                 content()

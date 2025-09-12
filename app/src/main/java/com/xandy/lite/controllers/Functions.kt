@@ -123,7 +123,7 @@ class Functions(
 
     suspend fun updateMediaFiles(
         onProgress: (Int) -> Unit, onUpdate: (Boolean) -> Unit
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO.limitedParallelism(4, "Update media files")) {
         try {
             /** A minute to load all media */
             withTimeout(60_000L) {
@@ -152,12 +152,13 @@ class Functions(
                     } catch (e: Exception) {
                         Log.e(XANDY_CLOUD, "Failed to delete audio files from DB: $e")
                     }
-                    onUpdate(false)
-                    onProgress(0)
                 }
             }
         } catch (e: TimeoutCancellationException) {
             Log.w(XANDY_CLOUD, "Time exceeded: $e")
+        } finally {
+            onUpdate(false)
+            onProgress(0)
         }
         return@withContext
     }
@@ -167,7 +168,17 @@ class Functions(
             audioDao.hideAudioFiles(uris)
             true
         } catch (e: Exception) {
-            Log.e("Xandy-Cloud", "Failed to hide audio files: $e")
+            Log.e(XANDY_CLOUD, "Failed to hide audio files: $e")
+            false
+        }
+    }
+
+    suspend fun showAudioFiles(uris: List<String>) = withContext(Dispatchers.IO) {
+        try {
+            audioDao.showAudioFiles(uris)
+            true
+        } catch (e: Exception) {
+            Log.e(XANDY_CLOUD, "Failed to show audio files: $e")
             false
         }
     }

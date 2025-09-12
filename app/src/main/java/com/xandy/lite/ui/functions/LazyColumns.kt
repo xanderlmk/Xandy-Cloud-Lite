@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.AudioWithPls
@@ -35,6 +36,7 @@ fun SongLazyColumn(
             val selected = songId in selectedSongSet
             SongRow(
                 audio, getUIStyle, isSelected = selected, enabled = enabled,
+                context = LocalContext.current,
                 onClick = { onClick(audio) },
                 onEdit = { onEdit(audio.uri.toString()) },
                 onDelete = { onDelete(audio) },
@@ -60,12 +62,12 @@ fun SongLazyColumn(
         modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, state = state,
         contentPadding = contentPadding
     ) {
-        items(list, key = { it.song.uri }) { pair ->
+        items(list, key = { it.song.uri.toString() }) { pair ->
             val selected = pair.song.uri.toString() in selectedSongSet
             SongRow(
                 pair.song, getUIStyle = getUIStyle, isSelected = selected,
                 isSelecting = isSelecting, enabled = enabled,
-                hideAllowed = hideAllowed,
+                context = LocalContext.current, hideAllowed = hideAllowed,
                 onClick = { onClick(pair.song) },
                 onDelete = { onDelete(pair.song) },
                 onEdit = { onEdit(pair.song.uri.toString()) },

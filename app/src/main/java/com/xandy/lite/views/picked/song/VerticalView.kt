@@ -78,7 +78,10 @@ fun VerticalSongView(
                 ) {
                     items(states.sortedQueue) { item ->
                         val isPicked = states.song?.id == item.mediaItem.itemKey()
-                        SongRow(item.mediaItem.toAudioFile(unknownTrackUri), getUIStyle, isPicked) {
+                        SongRow(
+                            item.mediaItem.toAudioFile(unknownTrackUri), getUIStyle,
+                            isPicked, LocalContext.current
+                        ) {
                             val index =
                                 states.unsortedQueue.indexOf(item).takeIf { it >= 0 }
                                     ?: return@SongRow
@@ -98,7 +101,9 @@ fun VerticalSongView(
                 verticalArrangement = Arrangement.Center
             ) {
                 states.song?.let {
-                    if (it.picture != null) Artwork(it.picture, pictureModifier)
+                    if (it.picture != null) Artwork(
+                        it.picture, LocalContext.current, pictureModifier
+                    )
                     else Artwork(pictureModifier)
                     Text(
                         text = it.title, style = MaterialTheme.typography.titleLarge,

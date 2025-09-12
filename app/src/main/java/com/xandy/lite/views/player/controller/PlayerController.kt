@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,12 +23,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -53,6 +58,8 @@ fun PlayerController(
     val repeatMode by navVM.repeatMode.collectAsStateWithLifecycle()
     val sd by navVM.songDetails.collectAsStateWithLifecycle()
     val ci = ContentIcons(getUIStyle)
+    val details = sd
+
     if (!tracks.isEmpty && sd != null) {
         Box(
             modifier
@@ -71,10 +78,10 @@ fun PlayerController(
                     .fillMaxHeight()
                     .fillMaxWidth(.625f)
             ) {
-                sd?.let {
+                if (details != null) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(it.picture)
+                            .data(details.picture)
                             .crossfade(true)
                             .build(),
                         contentDescription = "Album art",
@@ -87,21 +94,33 @@ fun PlayerController(
                     )
                     Column {
                         Text(
-                            it.title, maxLines = 1, fontSize = 16.sp,
+                            details.title, maxLines = 1, fontSize = 16.sp,
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier
                                 .basicMarquee()
                                 .padding(start = 4.dp),
                         )
                         Text(
-                            it.artist, maxLines = 1, fontSize = 14.sp,
+                            details.artist, maxLines = 1, fontSize = 14.sp,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 4.dp),
                         )
                     }
-                } ?: LaunchedEffect(Unit) {
-                    delay(1_000L)
-                    navVM.updatePickedSong(controller.currentMediaItem)
+                } else {
+                    var show by rememberSaveable { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        delay(2_000L); show = true
+                    }
+                    if (show) Text(
+                        text = "Null songs, click here to reset.",
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .height(60.dp)
+                            .clickable {
+                                navVM.updateTracks(controller.currentTracks)
+                                navVM.updatePickedSong(controller.currentMediaItem)
+                            }
+                    )
                 }
             }
             Row(

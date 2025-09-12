@@ -59,7 +59,7 @@ class SongRepositoryImpl(
 
     override val pickedSong = context.dataStore.data.map { preferences ->
         audioDao.getSongWithPls(preferences[CURRENT_MI] ?: "")
-    }.flowOn(Dispatchers.IO)
+    }
 
     override val mediaController = mcStates.mediaController
 
@@ -170,6 +170,7 @@ class SongRepositoryImpl(
         functions.deleteAudioFiles(list, mediaController.value)
 
     override suspend fun hideAudioFiles(uris: List<String>) = functions.hideAudioFiles(uris)
+    override suspend fun showAudioFiles(uris: List<String>) = functions.showAudioFiles(uris)
     override suspend fun hideAudioFile(uri: String) = functions.hideAudioFile(uri)
     override suspend fun showAudioFile(uri: String) = functions.showAudioFile(uri)
 
@@ -197,11 +198,15 @@ class SongRepositoryImpl(
     *   <-- Queue stuff -->
     */
     private val allMediaItems = combineAllMediaItems(audioFiles, hiddenAudio)
+        .flowOn(Dispatchers.IO.limitedParallelism(2, "All Media Items"))
     override val allMediaArtwork = allMediaItems.map { it.getAllImages() }
+        .flowOn(Dispatchers.IO.limitedParallelism(1, "All Images"))
 
     override val queueOrder = mcStates.queueOrderedBy
     override val sortedQueue = combineQueueMediaItems(mcStates.queue, allMediaItems, queueOrder)
+        .flowOn(Dispatchers.IO.limitedParallelism(2, "Sorted Queue"))
     override val unsortedQueue = combineQueueMediaItems(mcStates.queue, allMediaItems)
+        .flowOn(Dispatchers.IO.limitedParallelism(2, "Unsorted Queue"))
 
     override suspend fun setNewQueue(list: List<MediaItemWithCreatedOn>, name: String) =
         mcStates.updateQueue(list.map { it.mediaItem.mediaId }, name)
@@ -218,7 +223,7 @@ class SongRepositoryImpl(
     override suspend fun changePlaylistName(newName: String, name: String) =
         functions.changePlaylistName(newName, name)
 
-    init {
-        scope.launch(Dispatchers.IO) { updateMediaFiles() }
-    }
+    override fun autoUpdateEnabled() = llStates.autoUpdateEnabled()
+    override fun toggleAutoUpdate(enabled: Boolean) = llStates.toggleAutoUpdate(enabled)
+    override val autoUpdate = llStates.autoUpdate
 }

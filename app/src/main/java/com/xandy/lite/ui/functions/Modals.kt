@@ -45,9 +45,8 @@ fun DeleteModal(onDismissRequest: () -> Unit, onDelete: () -> Unit, string: Stri
 @Composable
 fun SelectImageModal(
     onDismissRequest: () -> Unit, onSelectLocal: () -> Unit, onSelectGallery: () -> Unit,
-    show: Boolean
+    show: Boolean, localEnabled: Boolean
 ) {
-
     if (show) {
         ModalBottomSheet(
             onDismissRequest = onDismissRequest
@@ -83,6 +82,7 @@ fun SelectImageModal(
                     }
                     Button(
                         onClick = onSelectLocal,
+                        enabled = localEnabled,
                         modifier = Modifier
                             .weight(1f)
                             .padding(horizontal = 6.dp)

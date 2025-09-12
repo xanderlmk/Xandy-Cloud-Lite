@@ -19,12 +19,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.xandy.lite.controllers.view.models.LocalMediaVM
 import com.xandy.lite.controllers.view.models.PickedSongVM
-import com.xandy.lite.models.ui.LocalAudioStates
-import com.xandy.lite.models.ui.LocalMediaStates
 import com.xandy.lite.models.ui.PickedSongVMStates
-import com.xandy.lite.navigation.NavViewModel
 
 
 @Composable
@@ -40,19 +36,6 @@ fun collectPickedSongVMStatesWithLifecycle(songVM: PickedSongVM) = PickedSongVMS
     queueAsc = songVM.queueAsc.collectAsStateWithLifecycle().value,
     queueOrder = songVM.queueOrder.collectAsStateWithLifecycle().value
 )
-
-
-@Composable
-fun collectLocalAudioStateWithLifecycle(navVM: NavViewModel): LocalAudioStates =
-    LocalAudioStates(
-        isLoading = navVM.localAudiosLoading.collectAsStateWithLifecycle().value,
-        tab = navVM.localTab.collectAsStateWithLifecycle().value,
-        isSearching = navVM.isSearching.collectAsStateWithLifecycle().value,
-        isSelecting = navVM.isSelecting.collectAsStateWithLifecycle().value,
-        plsDirection = navVM.localPlsDirection.collectAsStateWithLifecycle().value,
-        alDirection = navVM.alDirection.collectAsStateWithLifecycle().value,
-        percent = navVM.percentFetched.collectAsStateWithLifecycle().value
-    )
 
 @Composable
 fun SearchTextField(

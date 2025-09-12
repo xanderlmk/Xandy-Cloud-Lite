@@ -5,7 +5,6 @@ import android.app.PendingIntent
 import android.app.RecoverableSecurityException
 import android.content.Context
 import android.os.Build
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,7 +37,6 @@ import com.xandy.lite.controllers.view.models.LocalMediaVM
 import com.xandy.lite.controllers.view.models.LocalPLVM
 import com.xandy.lite.controllers.view.models.PickedSongVM
 import com.xandy.lite.models.application.AppVMProvider
-import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.ui.DeleteResult
 import com.xandy.lite.models.ui.InsertResult
 import com.xandy.lite.models.ui.UpdateResult
@@ -92,9 +89,6 @@ fun MainNavHost(
             val new = LocalMusicDestination.route
             navVM.updateRoute(new); mainNavController.navigate(new)
         }
-    }
-    LaunchedEffect(Unit) {
-        Log.d(XANDY_CLOUD, "${mainNavController.currentBackStackEntry?.destination?.route}")
     }
     content.CustomNavigationTabBars(mainNavController, navVM, getController) {
         NavHost(navController = mainNavController, startDestination = LocalMusicDestination.route) {
@@ -244,7 +238,7 @@ fun MainNavHost(
                     }
                 ) { writeRequestLauncher ->
                     pickedAudio?.let {
-                        EditAudioView(it.song, enabled, artworkList) { newAudio ->
+                        EditAudioView(it.song, enabled, getUIStyle, artworkList) { newAudio ->
                             coroutineScope.launch {
                                 updatedAudio = newAudio
                                 enabled = false
@@ -275,7 +269,6 @@ fun MainNavHost(
             }
             composable(AddToPlDestination.route) {
                 BackHandler { navVM.resetSearch(); onPopBackStack() }
-                val selectedSongIds by navVM.selectedSongIds.collectAsStateWithLifecycle()
                 val vm: AddToLocalPlVM = viewModel(factory = AppVMProvider.Factory)
                 var dismissEnabled by rememberSaveable { mutableStateOf(true) }
                 AddToPlaylistView(
@@ -283,8 +276,7 @@ fun MainNavHost(
                     onAdd = {
                         coroutineScope.launch {
                             dismissEnabled = false
-                            Log.d(XANDY_CLOUD, "$selectedSongIds")
-                            val result = vm.insertSongsToPl(selectedSongIds, it)
+                            val result = vm.insertSongsToPl(navVM.getSelectedSongIds(), it)
                             if (result) {
                                 navVM.endSelect(); navVM.resetSearch()
                                 navVM.navToPlaylist(it)
@@ -301,7 +293,7 @@ fun MainNavHost(
                     onAddNew = {
                         coroutineScope.launch {
                             dismissEnabled = false
-                            val result = vm.addPlWithSongs(selectedSongIds, it)
+                            val result = vm.addPlWithSongs(navVM.getSelectedSongIds(), it)
                             when (result) {
                                 InsertResult.Exists -> Toast.makeText(
                                     context, "Name already exists", Toast.LENGTH_SHORT

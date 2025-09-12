@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,17 +26,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.ui.functions.SelectImageModal
 import com.xandy.lite.ui.functions.item.details.Artwork
+import com.xandy.lite.ui.theme.GetUIStyle
+import my.nanihadesuka.compose.LazyColumnScrollbar
+import my.nanihadesuka.compose.ScrollbarSettings
 
 
 @Composable
 fun EditAudioView(
-    audioFile: AudioFile, enabled: Boolean,
+    audioFile: AudioFile, enabled: Boolean, getUIStyle: GetUIStyle,
     allMediaArtwork: List<Uri>, onUpdate: (AudioFile) -> Unit
 ) {
     var audio by rememberSaveable { mutableStateOf(audioFile) }
@@ -45,18 +50,18 @@ fun EditAudioView(
         HorizontalEditAudioView(
             audio = audio, enabled = enabled, allMediaArtwork = allMediaArtwork,
             onAudioChange = { audio = it },
-            onUpdate = onUpdate
+            onUpdate = onUpdate, getUIStyle = getUIStyle
         )
     else VerticalEditAudioView(
         audio = audio, enabled = enabled, allMediaArtwork = allMediaArtwork,
         onAudioChange = { audio = it },
-        onUpdate = onUpdate
+        onUpdate = onUpdate, getUIStyle = getUIStyle
     )
 }
 
 @Composable
 fun ImagePicker(
-    artworkList: List<Uri>, enabled: Boolean, isLandscape: Boolean,
+    artworkList: List<Uri>, enabled: Boolean, isLandscape: Boolean, getUIStyle: GetUIStyle,
     onImagePicked: (Uri) -> Unit
 ) {
     var showModal by rememberSaveable { mutableStateOf(false) }
@@ -69,12 +74,14 @@ fun ImagePicker(
     SelectImageModal(
         onDismissRequest = { showModal = false }, show = showModal,
         onSelectLocal = { showDialog = true },
-        onSelectGallery = { launcher.launch("image/*") }
+        onSelectGallery = { launcher.launch("image/*") },
+        localEnabled = artworkList.isNotEmpty()
     )
     LocalArtwork(
         onDismissRequest = { showDialog = false; showModal = false },
         onSelect = { showDialog = false; showModal = false; onImagePicked(it) },
-        list = artworkList, showDialog = showDialog, isLandscape = isLandscape
+        list = artworkList, showDialog = showDialog, isLandscape = isLandscape,
+        getUIStyle = getUIStyle
     )
     Button(
         onClick = { showModal = true },
@@ -85,9 +92,9 @@ fun ImagePicker(
 }
 
 @Composable
-fun LocalArtwork(
+private fun LocalArtwork(
     onDismissRequest: () -> Unit, onSelect: (Uri) -> Unit, list: List<Uri>,
-    showDialog: Boolean, isLandscape: Boolean
+    showDialog: Boolean, isLandscape: Boolean, getUIStyle: GetUIStyle
 ) {
 
     val rows = list.chunked(if (isLandscape) 4 else 2)
@@ -97,29 +104,41 @@ fun LocalArtwork(
                 onDismissRequest = onDismissRequest,
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.75f),
-                    contentPadding = PaddingValues(4.dp)
+                val state = rememberLazyListState()
+                LazyColumnScrollbar(
+                    state = state,
+                    settings = ScrollbarSettings(
+                        thumbSelectedColor = getUIStyle.selectedThumbColor(),
+                        thumbUnselectedColor = getUIStyle.unSelectedThumbColor()
+                    )
                 ) {
-                    items(rows) { rowItems ->
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            rowItems.forEach { image ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .aspectRatio(1f)
-                                        .padding(2.dp)
-                                ) {
-                                    Artwork(image, Modifier.clickable { onSelect(image) })
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.75f),
+                        contentPadding = PaddingValues(4.dp), state = state
+                    ) {
+                        items(rows) { rowItems ->
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                rowItems.forEach { image ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .padding(2.dp)
+                                    ) {
+                                        Artwork(
+                                            image, LocalContext.current,
+                                            Modifier.clickable { onSelect(image) }
+                                        )
+                                    }
                                 }
-                            }
-                            when (rowItems.size) {
-                                1 -> Spacer(modifier = Modifier.weight(3f))
-                                2 -> Spacer(modifier = Modifier.weight(2f))
-                                3 -> Spacer(modifier = Modifier.weight(1f))
+                                when (rowItems.size) {
+                                    1 -> Spacer(modifier = Modifier.weight(3f))
+                                    2 -> Spacer(modifier = Modifier.weight(2f))
+                                    3 -> Spacer(modifier = Modifier.weight(1f))
 
+                                }
                             }
                         }
                     }
@@ -127,26 +146,37 @@ fun LocalArtwork(
             }
         } else {
             Dialog(onDismissRequest = onDismissRequest) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.90f),
-                    contentPadding = PaddingValues(4.dp)
+                val state = rememberLazyListState()
+                LazyColumnScrollbar(
+                    state = state,
+                    settings = ScrollbarSettings(
+                        thumbSelectedColor = getUIStyle.selectedThumbColor(),
+                        thumbUnselectedColor = getUIStyle.unSelectedThumbColor()
+                    )
                 ) {
-                    items(rows) { rowItems ->
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            rowItems.forEach { image ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .aspectRatio(1f)
-                                        .padding(2.dp)
-                                ) {
-                                    Artwork(image, Modifier.clickable { onSelect(image) })
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.90f),
+                        contentPadding = PaddingValues(4.dp), state = state
+                    ) {
+                        items(rows) { rowItems ->
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                rowItems.forEach { image ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .padding(2.dp)
+                                    ) {
+                                        Artwork(
+                                            image, LocalContext.current,
+                                            Modifier.clickable { onSelect(image) })
+                                    }
                                 }
-                            }
-                            if (rowItems.size == 1) {
-                                Spacer(modifier = Modifier.weight(1f))
+                                if (rowItems.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }

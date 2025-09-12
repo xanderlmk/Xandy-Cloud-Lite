@@ -90,7 +90,7 @@ private fun queryMediaRows(
             chunk.clear()
         }
     }
-}.flowOn(Dispatchers.IO)
+}.flowOn(Dispatchers.IO.limitedParallelism(2, "Query media rows"))
 
 fun loadAudioFiles(
     context: Context, chunkSize: Int, onProgress: (Int) -> Unit
@@ -163,8 +163,9 @@ fun loadAudioFiles(
         )
         emit(mutableList.toList())
         mutableList.clear()
+        onProgress(0)
     }
-}.flowOn(Dispatchers.IO)
+}.flowOn(Dispatchers.IO.limitedParallelism(2, "File  Retrieval"))
 
 suspend fun loadAudioUris(
     context: Context, bucketFilter: Set<Pair<String, Long>> = emptySet()

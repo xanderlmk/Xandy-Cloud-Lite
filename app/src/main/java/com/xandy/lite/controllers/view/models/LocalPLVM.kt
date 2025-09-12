@@ -21,10 +21,11 @@ class LocalPLVM(
 ) : ViewModel() {
     companion object {
         private const val COMMAND_SHUFFLE = "Shuffle_Songs"
+        private const val TIMEOUT_MILLIS = 4_000L
     }
 
     val allSongs = songRepository.audioFiles.stateIn(
-        scope = viewModelScope, started = SharingStarted.Companion.WhileSubscribed(4_000L),
+        scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
         initialValue = AudioUIState()
     )
     val plWithAudio = songRepository.pickedPlaylist.stateIn(
@@ -45,7 +46,8 @@ class LocalPLVM(
     val isPlaying = songRepository.isPlaying
     val tracks = songRepository.tracks
     val pickedQueueName = songRepository.pickedQueueName.stateIn(
-        scope = viewModelScope, started = SharingStarted.Companion.WhileSubscribed(4_000L), initialValue = ""
+        scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+        initialValue = ""
     )
 
     fun startSelecting(songId: String) = uiRepository.startSelectingSongs(songId)
