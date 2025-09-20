@@ -5,11 +5,10 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.content.edit
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.xandy.lite.controllers.combineBucketKeyWithLocalBucket
-import com.xandy.lite.controllers.combinePickedIdxWithPl
+import com.xandy.lite.controllers.combinePickedUUIDWithPl
 import com.xandy.lite.controllers.combinePickedNameWithLocalAlbum
 import com.xandy.lite.controllers.combinePickedNameWithLocalArtist
 import com.xandy.lite.controllers.combinePickedNameWithLocalGenre
@@ -39,7 +38,7 @@ class LocalLibraryStates(
     mcStates: MediaControllerStates, unknownTrackUri: Uri, private val context: Context
 ) {
     companion object {
-        private val LOCAL_PL = intPreferencesKey("local_playlist")
+        private val LOCAL_PL = stringPreferencesKey("local_playlist_name")
         private val LOCAL_ALBUM = stringPreferencesKey("local_album_name")
         private val LOCAL_ARTIST = stringPreferencesKey("local_artist_name")
         private val LOCAL_BUCKET_VOL = stringPreferencesKey("local_bucket_vol")
@@ -53,8 +52,8 @@ class LocalLibraryStates(
     private val localPlsOrderedBy = mcStates.localPlsOrderedBy
     val localPlaylists = localPlsOrderedBy.flatMapLatest { it.toLocalPls(playlistDao) }
     val audioFiles = audioOrderedBy.flatMapLatest { it.toAudioUIState(audioDao) }
-    private val _plIndex = context.dataStore.data.map { preferences -> preferences[LOCAL_PL] ?: -1 }
-    val pickedPlaylist = combinePickedIdxWithPl(_plIndex, localPlaylists).flowOn(Dispatchers.IO)
+    private val _plUUID = context.dataStore.data.map { preferences -> preferences[LOCAL_PL] ?: "" }
+    val pickedPlaylist = combinePickedUUIDWithPl(_plUUID, localPlaylists).flowOn(Dispatchers.IO)
     val bucketsWithAudio = bucketDao.getFlowOfBucketsByNameASC()
         .flowOn(Dispatchers.IO.limitedParallelism(1, "Buckets/Folders"))
     private val _localBucketKey = context.dataStore.data.map { preferences ->
@@ -90,22 +89,17 @@ class LocalLibraryStates(
     val pickedLocalGenre =
         combinePickedNameWithLocalGenre(_localGenreName, localGenres)
 
-    suspend fun updateLocalPlIndex(idx: Int) = withContext(Dispatchers.IO) {
-        try {
-            context.dataStore.edit { settings ->
-                settings[LOCAL_PL] = idx
-            }
+    suspend fun updateLocalPlUUID(s: String) = withContext(Dispatchers.IO) {
+        try { context.dataStore.edit { settings -> settings[LOCAL_PL] = s }
         } catch (e: Exception) {
-            Log.w(XANDY_CLOUD, "Failed updating playlist index: $e")
+            Log.w(XANDY_CLOUD, "Failed updating playlist name: $e")
             return@withContext
         }
     }
 
     suspend fun updateLocalAlbumName(n: String) = withContext(Dispatchers.IO) {
         try {
-            context.dataStore.edit { settings ->
-                settings[LOCAL_ALBUM] = n
-            }
+            context.dataStore.edit { settings -> settings[LOCAL_ALBUM] = n }
         } catch (e: Exception) {
             Log.w(XANDY_CLOUD, "Failed updating album name: $e")
             return@withContext
@@ -114,9 +108,7 @@ class LocalLibraryStates(
 
     suspend fun updateLocalArtistName(n: String) = withContext(Dispatchers.IO) {
         try {
-            context.dataStore.edit { settings ->
-                settings[LOCAL_ARTIST] = n
-            }
+            context.dataStore.edit { settings -> settings[LOCAL_ARTIST] = n }
         } catch (e: Exception) {
             Log.w(XANDY_CLOUD, "Failed updating artist name: $e")
             return@withContext
@@ -148,7 +140,7 @@ class LocalLibraryStates(
 
     private val appPref = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
-    fun autoUpdateEnabled() = appPref.getBoolean(AUTO_UPDATE, false)
+    fun autoUpdateEnabled() = appPref.getBoolean(AUTO_UPDATE, true)
     fun toggleAutoUpdate(enabled: Boolean) {
         appPref.edit { putBoolean(AUTO_UPDATE, enabled) }; _autoUpdate.update { enabled }
     }

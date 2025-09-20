@@ -13,6 +13,7 @@ import com.xandy.lite.db.tables.PlaylistSongOrder
 import com.xandy.lite.db.tables.LocalPlsWithAudio
 import com.xandy.lite.db.tables.PLSongCrossRef
 import com.xandy.lite.db.tables.Playlist
+import com.xandy.lite.models.ui.PlaylistName
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -70,17 +71,22 @@ interface PlaylistDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addSongToPlaylist(crossRef: PLSongCrossRef)
 
+    @Query("""SELECT playlist_id FROM local_playlist where id = :id""")
+    suspend fun getPlaylistNameById(id: String): PlaylistName
+
     @Transaction
     suspend fun addSongsToPl(songIds: List<String>, playlistId: String) {
+        val n = getPlaylistNameById(playlistId)
         songIds.forEach {
             addSongToPlaylist(
-                PLSongCrossRef(songId = it.toUri(), playlistId = playlistId)
+                PLSongCrossRef(songId = it.toUri(), playlistId = n.name)
             )
         }
     }
     @Transaction
     suspend fun addPlWithSongs(songIds: List<String>, pl: Playlist) {
         insertPlaylist(pl)
+        insertPLOrderBy(PlaylistSongOrder(pl.name))
         songIds.forEach {
             addSongToPlaylist(
                 PLSongCrossRef(songId = it.toUri(), playlistId = pl.name)

@@ -36,6 +36,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kyant.taglib.TagProperty
 import com.xandy.lite.R
 import com.xandy.lite.models.ui.LocalAudioStates
 import com.xandy.lite.models.ui.LocalMusicTabs
@@ -52,7 +53,8 @@ fun LocalAudioOptions(
     onUpdateSongOrder: (SongOrder) -> Unit, onReversePlsOrder: () -> Unit,
     onUpdatePlsOrder: (PlaylistOrder) -> Unit, onSearch: () -> Unit, onHideAudios: () -> Unit,
     onHideFolders: () -> Unit, onAddSongs: () -> Unit, onShareSongs: () -> Unit,
-    onShowAudios: () -> Unit,onToggleAutoUpdate: () -> Unit, getUIStyle: GetUIStyle
+    onUpdateMetadata: (String) -> Unit, onShowAudios: () -> Unit, onToggleAutoUpdate: () -> Unit,
+    getUIStyle: GetUIStyle
 ) {
     val ci = ContentIcons(getUIStyle)
 
@@ -79,7 +81,8 @@ fun LocalAudioOptions(
             )
             else EditSongOptions(
                 onHideOrShow = onHideAudios, onAddSongs = onAddSongs, onShareSongs = onShareSongs,
-                getUIStyle = getUIStyle, hide = true
+                getUIStyle = getUIStyle, hide = true, onUpdateMetadata = onUpdateMetadata,
+                enabled = !audioStates.isLoading
             )
 
         }
@@ -116,7 +119,7 @@ fun LocalAudioOptions(
             if (audioStates.isSelecting) EditSongOptions(
                 onHideOrShow = onShowAudios, onAddSongs = onAddSongs,
                 onShareSongs = onShareSongs, getUIStyle = getUIStyle,
-                hide = false
+                hide = false, onUpdateMetadata = onUpdateMetadata, enabled = !audioStates.isLoading
             )
         }
     }
@@ -139,7 +142,7 @@ fun PlayListOptions(
         onSubmit = {
             coroutineScope.launch {
                 result(
-                    id = plWithAudio?.playlist?.name,
+                    id = plWithAudio?.playlist?.id,
                     onResult = { navVM.addLocalSongsToPL(navVM.getSelectedSongIds(), it) },
                     onEndSelect = { navVM.endSelect() },
                     context = context, failureText = "Failed to add songs"
@@ -295,11 +298,8 @@ fun AllPLsOptions(
 
 @Composable
 private fun EditSongOptions(
-    hide: Boolean,
-    onHideOrShow: () -> Unit,
-    onAddSongs: () -> Unit,
-    onShareSongs: () -> Unit,
-    getUIStyle: GetUIStyle
+    hide: Boolean, onHideOrShow: () -> Unit, onAddSongs: () -> Unit, onShareSongs: () -> Unit,
+    onUpdateMetadata: (String) -> Unit, getUIStyle: GetUIStyle, enabled: Boolean
 ) {
     val ci = ContentIcons(getUIStyle)
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -327,6 +327,25 @@ private fun EditSongOptions(
                 text = { Text("Share") },
                 trailingIcon = { ci.ContentIcon(Icons.Default.Share) },
                 onClick = onShareSongs
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Edit artist") },
+                trailingIcon = { ci.ContentIcon(painterResource(R.drawable.rounded_person_edit)) },
+                onClick = { onUpdateMetadata(TagProperty.ARTIST) },
+                enabled = enabled
+            )
+            DropdownMenuItem(
+                text = { Text("Edit album") },
+                trailingIcon = { ci.ContentIcon(painterResource(R.drawable.baseline_album)) },
+                onClick = { onUpdateMetadata(TagProperty.ALBUM) },
+                enabled = enabled
+            )
+            DropdownMenuItem(
+                text = { Text("Edit genre") },
+                trailingIcon = { ci.ContentIcon(painterResource(R.drawable.rounded_genres)) },
+                onClick = { onUpdateMetadata(TagProperty.GENRE) },
+                enabled = enabled
             )
         }
     }

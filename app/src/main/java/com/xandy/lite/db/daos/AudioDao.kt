@@ -95,6 +95,7 @@ interface AudioDao {
                         genre = audio.genre, createdOn = audio.createdOn,
                         hidden = hidden.hidden, durationMillis = audio.durationMillis,
                         permanentlyHidden = hidden.permanentlyHidden,
+                        year = audio.year, day = audio.day, month = audio.month,
                         volumeName = audio.volumeName, bucketId = audio.bucketId
                     )
                 )
@@ -105,13 +106,30 @@ interface AudioDao {
     @Query(
         """
         UPDATE local_audio 
-        SET title = :title, artist = :artist, genre = :genre, album = :album, picture = :pictureUri
+        SET title = :title, artist = :artist, genre = :genre, album = :album, picture = :pictureUri,
+        year = :year, day = :day, month = :month 
         WHERE song_id = :uri
         """
     )
     suspend fun updateAudioTags(
-        title: String, artist: String, genre: String?, album: String?, pictureUri: Uri?, uri: String
+        title: String, artist: String, genre: String?, album: String?, pictureUri: Uri?,
+        year: Int?, day: Int?, month: Int?, uri: String
     )
+
+    @Query(
+        """UPDATE local_audio SET artist = :artist WHERE song_id IN (:ids)"""
+    )
+    suspend fun updateAudioListArtist(ids: List<String>, artist: String)
+
+    @Query(
+        """UPDATE local_audio SET album = :album WHERE song_id IN (:ids)"""
+    )
+    suspend fun updateAudioListAlbum(ids: List<String>, album: String)
+
+    @Query(
+        """UPDATE local_audio SET genre = :genre WHERE song_id IN (:ids)"""
+    )
+    suspend fun updateAudioListGenre(ids: List<String>, genre: String)
 
     @Delete
     suspend fun deletePLSongCrossRef(crossRef: PLSongCrossRef)

@@ -11,9 +11,9 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -147,7 +147,7 @@ fun MainNavHost(
                     LocalMusicView(
                         modifier = modifier, getUIStyle = getUIStyle, localMediaVM = localMediaVM,
                         onNavToPl = {
-                            coroutineScope.launch { navVM.updatePLIndex(it) }
+                            coroutineScope.launch { navVM.updatePlUUID(it) }
                             onNavigate(LocalPlDestination.route)
                         },
                         onNavToAlbum = {
@@ -211,7 +211,7 @@ fun MainNavHost(
                             onNavigate(EditAudioDestination.route)
                         }
                     )
-                } ?: Text("NULL")
+                } ?: Box(modifier = modifier)
             }
             composable(EditAudioDestination.route) {
                 BackHandler { onPopBackStack() }
@@ -271,6 +271,7 @@ fun MainNavHost(
                 BackHandler { navVM.resetSearch(); onPopBackStack() }
                 val vm: AddToLocalPlVM = viewModel(factory = AppVMProvider.Factory)
                 var dismissEnabled by rememberSaveable { mutableStateOf(true) }
+                val showDialog = rememberSaveable { mutableStateOf(false) }
                 AddToPlaylistView(
                     getUIStyle = getUIStyle, modifier = modifier, vm = vm, enabled = dismissEnabled,
                     onAdd = {
@@ -288,12 +289,11 @@ fun MainNavHost(
                             ).show()
                             dismissEnabled = true
                         }
-
-                    },
+                    }, showDialog = showDialog,
                     onAddNew = {
                         coroutineScope.launch {
                             dismissEnabled = false
-                            val result = vm.addPlWithSongs(navVM.getSelectedSongIds(), it)
+                            val (result, id) = vm.addPlWithSongs(navVM.getSelectedSongIds(), it)
                             when (result) {
                                 InsertResult.Exists -> Toast.makeText(
                                     context, "Name already exists", Toast.LENGTH_SHORT
@@ -305,7 +305,8 @@ fun MainNavHost(
 
                                 InsertResult.Success -> {
                                     navVM.endSelect(); navVM.resetSearch()
-                                    navVM.navToPlaylist(it)
+                                    showDialog.value = false
+                                    navVM.navToPlaylist(id)
                                     onNavigateAndRemove(
                                         LocalPlDestination.route, AddToPlDestination.route
                                     )

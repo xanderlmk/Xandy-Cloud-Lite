@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.FileProvider
+import androidx.core.database.getIntOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.xandy.lite.R
@@ -30,7 +31,7 @@ import java.util.UUID
 
 private data class MediaRow(
     val id: Long, val albumId: Long,
-    val displayName: String,
+    val displayName: String, val year: Int?,
     val duration: Long, val contentUri: Uri,
     val dateAddedMs: Long, val albumArtUri: Uri?,
     val bucketId: Long, val volumeName: String,
@@ -45,6 +46,7 @@ private fun queryMediaRows(
         MediaStore.Audio.Media.DURATION,
         MediaStore.Audio.Media.ALBUM_ID,
         MediaStore.Audio.Media.DATE_ADDED,
+        MediaStore.Audio.Media.YEAR,
         MediaStore.Audio.Media.VOLUME_NAME,
         MediaStore.Audio.Media.BUCKET_ID
     )
@@ -66,16 +68,18 @@ private fun queryMediaRows(
             val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
             val bucketIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.BUCKET_ID)
+            val yearIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 val albumId = cursor.getLong(albumIdCol)
                 val displayName = cursor.getString(nameCol)
+                val year = cursor.getIntOrNull(yearIdCol)
                 val duration = cursor.getLong(durCol)
                 val dateAdded = cursor.getLong(dateAddedCol) * 1000L
                 val contentUri = ContentUris.withAppendedId(uri, id)
                 chunk += MediaRow(
                     id = id, albumId = albumId, displayName = displayName, duration = duration,
-                    contentUri = contentUri, dateAddedMs = dateAdded,
+                    contentUri = contentUri, dateAddedMs = dateAdded, year = year,
                     albumArtUri = albumArtOrNull(context, albumId),
                     volumeName = volume, bucketId = cursor.getLong(bucketIdCol)
                 )
@@ -120,6 +124,8 @@ fun loadAudioFiles(
                     val artist = metadata?.propertyMap[TagProperty.ARTIST]?.singleOrNull()
                     val album = metadata?.propertyMap[TagProperty.ALBUM]?.singleOrNull()
                     val genre = metadata?.propertyMap[TagProperty.GENRE]?.singleOrNull()
+                    val dateRelease = metadata?.propertyMap[TagProperty.DATE]?.singleOrNull()
+                    val dateParts = parseTagDate(dateRelease)
                     val pictureUri = row.albumArtUri ?: getArtData(metadata, context)
                     ?: context.drawableResUri(R.drawable.unknown_track)
                     mutableList += AudioFile(
@@ -127,6 +133,8 @@ fun loadAudioFiles(
                         displayName = row.displayName,
                         title = title ?: row.displayName, artist = artist ?: "Unknown Artist",
                         album = album, genre = genre,
+                        year = row.year ?: dateParts.year,
+                        day = dateParts.day, month = dateParts.month,
                         durationMillis = row.duration,
                         picture = pictureUri, createdOn = date,
                         bucketId = row.bucketId, volumeName = row.volumeName
@@ -137,7 +145,7 @@ fun loadAudioFiles(
                         uri = row.contentUri,
                         displayName = row.displayName,
                         title = row.displayName, artist = "Unknown Artist",
-                        album = null, genre = null,
+                        album = null, genre = null, year = row.year, day = null, month = null,
                         durationMillis = row.duration,
                         picture = context.drawableResUri(R.drawable.unknown_track),
                         createdOn = date,
@@ -166,6 +174,33 @@ fun loadAudioFiles(
         onProgress(0)
     }
 }.flowOn(Dispatchers.IO.limitedParallelism(2, "File  Retrieval"))
+data class DateParts(val year: Int?, val month: Int?, val day: Int?)
+
+
+private fun parseTagDate(dateStr: String?): DateParts {
+    val s = dateStr?.trim() ?: return DateParts(null, null, null)
+    if (s.equals("null", ignoreCase = true) || s.isEmpty()) return DateParts(null, null, null)
+
+    // Match "yyyy", or "yyyy-sep-mm", or "yyyy-sep-mm-sep-dd" where sep is the separator
+    // and can be -, /, ., , or space
+    val re = Regex("""^(\d{4})(?:[ \-/,.](\d{1,2})(?:[ \-/,.](\d{1,2}))?)?$""")
+    re.matchEntire(s)?.let { m ->
+        val y = m.groupValues[1].toIntOrNull()
+        val mo = m.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull()
+        val d = m.groupValues.getOrNull(3)?.takeIf { it.isNotEmpty() }?.toIntOrNull()
+        return DateParts(y, mo, d)
+    }
+
+    // Fallback: extract the first 1..3 numbers found (handles things like "2025 9 19"
+    // or weird formats)
+    val ints = Regex("""\d+""").findAll(s).map { it.value.toIntOrNull() }.filterNotNull().toList()
+    return when (ints.size) {
+        0 -> DateParts(null, null, null)
+        1 ->  DateParts(ints[0].takeIf { it > 32 }, null, null)
+        2 -> DateParts(ints[0], ints[1], null)
+        else -> DateParts(ints[0], ints[1], ints[2])
+    }
+}
 
 suspend fun loadAudioUris(
     context: Context, bucketFilter: Set<Pair<String, Long>> = emptySet()

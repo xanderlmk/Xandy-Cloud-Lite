@@ -1,7 +1,13 @@
 package com.xandy.lite.navigation
 
+import android.app.PendingIntent
+import android.content.Context
 import android.content.res.Configuration
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.ManagedActivityResultLauncher
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
@@ -32,10 +39,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.kyant.taglib.TagProperty
 import com.xandy.lite.controllers.shareMultipleAudios
 import com.xandy.lite.models.ui.InsertResult
 import com.xandy.lite.models.ui.LocalMusicTabs
 import com.xandy.lite.models.ui.ShowModalFor
+import com.xandy.lite.models.ui.UpdateResult
 import com.xandy.lite.ui.functions.AddIconButton
 import com.xandy.lite.ui.functions.AddPlDialog
 import com.xandy.lite.ui.functions.ChangePlNameDialog
@@ -43,6 +52,7 @@ import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.LocalAudioOptions
 import com.xandy.lite.ui.functions.PlayListOptions
 import com.xandy.lite.ui.functions.SearchTextField
+import com.xandy.lite.ui.functions.UpdateAudioListMetadata
 import com.xandy.lite.ui.theme.GetUIStyle
 import com.xandy.lite.views.player.controller.PlayerController
 import kotlinx.coroutines.delay
@@ -76,6 +86,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
         var dismissEnabled by rememberSaveable { mutableStateOf(true) }
         var showAddPlDialog by rememberSaveable { mutableStateOf(false) }
         var showRenamePlDialog by rememberSaveable { mutableStateOf(false) }
+        var showMetadataDialog by rememberSaveable { mutableStateOf(Pair(false, "")) }
         val plWithAudio by navVM.plWithAudio.collectAsStateWithLifecycle()
         val selectedFolders by navVM.selectedFolders.collectAsStateWithLifecycle()
         val audioStates by navVM.audioStates.collectAsStateWithLifecycle()
@@ -84,7 +95,11 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
         val localArtwork by navVM.artworkList.collectAsStateWithLifecycle()
         val isLandscape =
             LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
+        var metadataString by rememberSaveable { mutableStateOf("") }
+        val onUpdateMetadata: () -> Unit = {
+            showMetadataDialog = Pair(false, ""); dismissEnabled = true; navVM.endSelect()
+            metadataString = ""
+        }
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             topBar = {
@@ -174,7 +189,8 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                     },
                                     onToggleAutoUpdate = {
                                         navVM.toggleAutoUpdate(!audioStates.autoUpdate)
-                                    }
+                                    },
+                                    onUpdateMetadata = { showMetadataDialog = Pair(true, it) }
                                 )
                             }
 
@@ -193,6 +209,10 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                         if (route == LocalMusicDestination.route && !isSearching) {
                             if (localTab == LocalMusicTabs.PLAYLIST) {
                                 AddIconButton(ci) { showAddPlDialog = true }
+                            } else if (localTab == LocalMusicTabs.LIBRARY && isSelecting) {
+                                IconButton(onClick = { navVM.endSelect() }) {
+                                    ci.ContentIcon(Icons.Default.Close)
+                                }
                             }
                         } else if (route == PickedSongDestination.route) {
                             IconButton(onClick = {
@@ -312,6 +332,58 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                     showModal = showImageModal, getUIStyle = getUIStyle,
                     onDismiss = { showImageModal = ShowModalFor.Idle }
                 )
+                WithRequestLauncher(
+                    onResultOk = {
+                        coroutineScope.launch {
+                            val selectedSongIds = navVM.getSelectedSongIds()
+                            val string = metadataString.ifBlank {
+                                Toast.makeText(
+                                    context, "Null string", Toast.LENGTH_SHORT
+                                ).show()
+                                onUpdateMetadata()
+                                return@launch
+                            }
+                            val result = updateTags(
+                                showMetadataDialog.second, selectedSongIds, navVM, context, string
+                            )
+                            if (result is UpdateResult.Failure) Toast.makeText(
+                                context, "Failed to update selected tag", Toast.LENGTH_SHORT
+                            ).show()
+
+                            onUpdateMetadata()
+                        }
+                    }
+                ) { writeRequestLauncher ->
+                    UpdateAudioListMetadata(
+                        showMetadataDialog.first, getUIStyle = getUIStyle, enabled = dismissEnabled,
+                        onDismiss = { showMetadataDialog = Pair(false, "") },
+                        onSubmit = {
+                            coroutineScope.launch {
+                                dismissEnabled = false
+                                metadataString = it
+                                val selectedSongIds = navVM.getSelectedSongIds()
+                                val result = updateTags(
+                                    showMetadataDialog.second, selectedSongIds, navVM, context, it
+                                )
+                                when (val r = result) {
+                                    is UpdateResult.FileException ->
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            requestWritePermission(writeRequestLauncher, r.request)
+                                        }
+
+                                    UpdateResult.Success -> onUpdateMetadata()
+                                    else -> {
+                                        Toast.makeText(
+                                            context, "Something went wrong", Toast.LENGTH_SHORT
+                                        ).show()
+                                        onUpdateMetadata()
+                                    }
+                                }
+                            }
+                        },
+                        metadataToUpdate = showMetadataDialog.second
+                    )
+                }
                 content()
                 val mc = mediaController
                 if (mc != null) {
@@ -341,6 +413,30 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                     )
                 }
             }
+        }
+    }
+}
+
+private fun requestWritePermission(
+    writeRequestLauncher: ManagedActivityResultLauncher<IntentSenderRequest, ActivityResult>,
+    intent: PendingIntent
+) {
+    writeRequestLauncher.launch(IntentSenderRequest.Builder(intent.intentSender).build())
+}
+
+private suspend fun updateTags(
+    string: String, selectedSongIds: List<String>, navVM: NavViewModel, context: Context, it: String
+): UpdateResult {
+    return when (string) {
+        TagProperty.ARTIST -> navVM.updateArtistsOfAL(selectedSongIds, it)
+
+        TagProperty.ALBUM -> navVM.updateAlbumOfAL(selectedSongIds, it)
+
+        TagProperty.GENRE -> navVM.updateGenreOfAL(selectedSongIds, it)
+
+        else -> {
+            Toast.makeText(context, "Unknown property", Toast.LENGTH_SHORT).show()
+            UpdateResult.Failure
         }
     }
 }

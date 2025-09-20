@@ -65,7 +65,7 @@ import my.nanihadesuka.compose.ScrollbarSettings
 @Composable
 fun LocalMusicView(
     modifier: Modifier, getUIStyle: GetUIStyle, onAdd: (String) -> Unit,
-    onNavToArtist: (String) -> Unit, onNavToAlbum: (String) -> Unit, onNavToPl: (Int) -> Unit,
+    onNavToArtist: (String) -> Unit, onNavToAlbum: (String) -> Unit, onNavToPl: (String) -> Unit,
     onNavToGenre: (String) -> Unit, onNavToFolder: (String, Long) -> Unit,
     onEdit: (String) -> Unit, onDelete: (AudioFile) -> Unit, localMediaVM: LocalMediaVM
 ) {
@@ -170,14 +170,13 @@ fun LocalMusicView(
                 }
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     items(
-                        library.plsWithAudios.list.size,
-                        key = { library.plsWithAudios.list[it].playlist.name }
-                    ) { index ->
-                        val pl = library.plsWithAudios.list[index]
+                        library.plsWithAudios.list,
+                        key = { it.playlist.name }
+                    ) { pl ->
                         PlaylistRow(
                             pl = pl, getUIStyle, ci = ci,
                             onDelete = { showDelete = Pair(true, pl.playlist) },
-                            onClick = { onNavToPl(index) })
+                            onClick = { onNavToPl(pl.playlist.id) })
 
                     }
                 }

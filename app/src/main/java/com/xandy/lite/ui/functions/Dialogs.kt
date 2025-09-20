@@ -110,7 +110,51 @@ fun ChangePlNameDialog(
                         ).show()
                         else onSubmit(name)
                     }, enabled = enabled
-                ) { Text("Add") }
+                ) { Text("Rename") }
+            }
+        }
+    }
+}
+
+@Composable
+fun UpdateAudioListMetadata(
+    showDialog: Boolean, onDismiss: () -> Unit, onSubmit: (String) -> Unit, getUIStyle: GetUIStyle,
+    enabled: Boolean, metadataToUpdate: String
+) {
+    val context = LocalContext.current
+    if (showDialog) {
+        var name by rememberSaveable { mutableStateOf("") }
+        val string = metadataToUpdate.lowercase().replaceFirstChar { it.uppercase() }
+        Dialog(onDismissRequest = onDismiss) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(getUIStyle.dialogBackGroundColor(), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 4.dp, vertical = 25.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Enter $string", textAlign = TextAlign.Center,
+                    fontSize = 18.sp, style = MaterialTheme.typography.titleLarge
+                )
+                TextField(
+                    value = name, onValueChange = { name = it },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp)
+                )
+                Button(
+                    onClick = {
+                        if (name.isEmpty()) Toast.makeText(
+                            context, "$string can't be empty", Toast.LENGTH_LONG
+                        ).show()
+                        else onSubmit(name)
+                    }, enabled = enabled
+                ) { Text("Rename") }
             }
         }
     }

@@ -20,6 +20,8 @@ import kotlinx.parcelize.Parcelize
 import java.util.Date
 
 private const val SONG_ID = "song_id"
+private const val PLAYLIST_ID = "playlist_id"
+
 
 @Parcelize
 data class AudioUIState(
@@ -142,3 +144,4 @@ fun Context.drawableResUri(@DrawableRes resId: Int): Uri =
 data class IsBucketHidden(val hidden: Boolean)
 data class IsAudioHidden(val hidden: Boolean, val permanentlyHidden: Boolean)
 data class AudioUri(@ColumnInfo(name = SONG_ID) val uri: Uri)
+data class PlaylistName(@ColumnInfo(name = PLAYLIST_ID) val name: String)

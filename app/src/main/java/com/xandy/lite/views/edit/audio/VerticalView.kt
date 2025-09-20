@@ -83,6 +83,17 @@ fun VerticalEditAudioView(
                 .padding(8.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
         )
+        Text(text = "Release Date", textDecoration = TextDecoration.Underline)
+        DateChooser(
+            minYear = 1900, getUIStyle = getUIStyle,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            selectedDay = audio.day, selectedYear = audio.year, selectedMonth = audio.month,
+            onYearSelected = { onAudioChange(audio.copy(year = it)) },
+            onDaySelected = { if(audio.month != null) onAudioChange(audio.copy(day = it)) },
+            onMonthSelected = { onAudioChange(audio.copy(month = it)) }
+        )
         Text(text = "Picture", textDecoration = TextDecoration.Underline)
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)

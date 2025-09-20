@@ -94,11 +94,11 @@ interface SongRepository {
     suspend fun addLocalPlaylist(name: String): InsertResult
     val pickedPlaylist: Flow<PlaylistWithCount?>
 
-    /** Update local playlist index to get the picked playlist */
-    suspend fun updateLocalPlIndex(idx: Int)
+    /** Update local playlist name to get the picked playlist */
+    suspend fun updateLocalPlUUID(n: String)
     suspend fun updateLocalAlbumName(n: String)
     suspend fun updateLocalArtistName(n: String)
-    suspend fun findPlaylistIdx(name: String): Int
+    suspend fun findPlaylistUUID(name: String): String
     suspend fun addLocalSongsToPl(songIds: List<String>, playlistId: String): Boolean
     suspend fun removeLocalSongsFromPl(songIds: List<String>, playlistId: String): Boolean
     val bucketsWithAudio: Flow<List<BucketWithAudio>>
@@ -131,16 +131,22 @@ interface SongRepository {
     suspend fun updateAudioTags(newAudio: AudioFile): UpdateResult
     fun getPickedAudio(uri: String): Flow<AudioWithPls?>
     suspend fun deleteLocalPlaylist(playlist: Playlist): Boolean
-    suspend fun addPlWithSongs(songIds: List<String>, name: String): InsertResult
+    suspend fun addPlWithSongs(songIds: List<String>, name: String): Pair<InsertResult, String>
     suspend fun updatePLSongOrder(order: PlaylistSongOrder)
     val allMediaArtwork: Flow<List<Uri>>
     val queueOrder: StateFlow<OrderQueueBy>
     suspend fun setNewQueue(list: List<MediaItemWithCreatedOn>, name: String)
     fun updateQueueOrder(orderQueueBy: OrderQueueBy)
 
-    suspend fun changePlaylistName(newName: String, name: String): InsertResult
+    suspend fun changePlaylistName(
+        newName: String, name: String, pickedPlUUID: String?
+    ): InsertResult
 
     fun autoUpdateEnabled(): Boolean
     fun toggleAutoUpdate(enabled: Boolean)
-    val autoUpdate : StateFlow<Boolean>
+    val autoUpdate: StateFlow<Boolean>
+    /** Update artist of the selected song/audio list */
+    suspend fun updateArtistOfAL(ids: List<String>, artist: String): UpdateResult
+    suspend fun updateAlbumOfAL(ids: List<String>, album: String): UpdateResult
+    suspend fun updateGenreOfAL(ids: List<String>, genre: String): UpdateResult
 }

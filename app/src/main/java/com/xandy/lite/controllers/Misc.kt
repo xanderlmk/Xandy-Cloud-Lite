@@ -172,18 +172,17 @@ private fun combineSongWithMediaMetadata(
     return SongDetails(id, title.toString(), artist.toString(), album?.toString(), artwork)
 }
 
-fun combinePickedIdxWithPl(
-    plIndex: Flow<Int>, localPlaylists: Flow<LocalPlUIState>
-): Flow<PlaylistWithCount?> = combine(plIndex, localPlaylists) { idx, pls ->
-    if (idx == -1 || pls.list.isEmpty()) null
-    else pls.list[idx]
-
+fun combinePickedUUIDWithPl(
+    name: Flow<String>, localPlaylists: Flow<LocalPlUIState>
+): Flow<PlaylistWithCount?> = combine(name, localPlaylists) { n, pls ->
+    if (n.isBlank() || pls.list.isEmpty()) null
+    else pls.list.find { it.playlist.id == n }
 }
 
 fun combinePickedNameWithLocalAlbum(
     name: Flow<String>, localAlbums: Flow<List<Album>>
 ): Flow<Album?> = combine(name, localAlbums) { n, albums ->
-    if (n.isEmpty() || albums.isEmpty()) null
+    if (n.isBlank() || albums.isEmpty()) null
     else albums.find { it.name == n.trim() }
 }
 

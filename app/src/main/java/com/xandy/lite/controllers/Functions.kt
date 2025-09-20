@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.media3.session.MediaController
 import com.xandy.lite.controllers.media.store.loadAudioFiles
 import com.xandy.lite.controllers.media.store.loadAudioUris
@@ -15,12 +16,14 @@ import com.xandy.lite.controllers.media.store.updateAlbum
 import com.xandy.lite.controllers.media.store.updateArtist
 import com.xandy.lite.controllers.media.store.updateArtwork
 import com.xandy.lite.controllers.media.store.updateGenre
+import com.xandy.lite.controllers.media.store.updateReleaseDate
 import com.xandy.lite.controllers.media.store.updateTitle
 import com.xandy.lite.db.daos.AudioDao
 import com.xandy.lite.db.daos.BucketDao
 import com.xandy.lite.db.daos.PlaylistDao
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Playlist
+import com.xandy.lite.db.tables.datedString
 import com.xandy.lite.db.tables.toAudioFile
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.ui.AudioUIState
@@ -92,15 +95,13 @@ class Functions(
         }
     }
 
-    suspend fun findPlaylistIdx(
-        name: String, pls: Set<Playlist>, onUpdate: suspend (Int) -> Unit
-    ) =
-        withContext(Dispatchers.IO) {
-            val pl = pls.find { it.name == name } ?: return@withContext -1
-            val index = pls.indexOf(pl).takeIf { it >= 0 } ?: return@withContext -1
-            onUpdate(index)
-            return@withContext index
-        }
+    suspend fun findPlaylistUUID(
+        uuid: String, pls: Set<Playlist>, onUpdate: suspend (String) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val pl = pls.find { it.id == uuid } ?: return@withContext ""
+        onUpdate(pl.id)
+        return@withContext pl.id
+    }
 
     suspend fun hideBuckets(
         set: Set<Pair<String, Long>>, onUpdate: (Boolean) -> Unit
@@ -212,15 +213,18 @@ class Functions(
             val artist = newAudio.artist.trim()
             val genre = newAudio.genre?.trim()
             val album = newAudio.album?.trim()
+            val date = newAudio.datedString()
             val result1 = updateTitle(context, newAudio.uri, title)
             val result2 = updateArtist(context, newAudio.uri, artist)
             val result3 = genre?.let { updateGenre(context, newAudio.uri, it) } ?: true
             val result4 = album?.let { updateAlbum(context, newAudio.uri, it) } ?: true
             val (result5, newArtwork) = updateArtwork(context, newAudio.uri, newAudio.picture)
-            if (!result1 || !result2 || !result3 || !result4 || !result5)
+            val result6 = date?.let { updateReleaseDate(context, newAudio.uri, it) } ?: true
+            if (!result1 || !result2 || !result3 || !result4 || !result5 || !result6)
                 return@withContext UpdateResult.Failure
             audioDao.updateAudioTags(
                 title = title, artist = artist, genre = genre, album = album,
+                year = newAudio.year, day = newAudio.day, month = newAudio.month,
                 pictureUri = newArtwork, uri = newAudio.uri.toString()
             )
             withContext(Dispatchers.Main) {
@@ -237,6 +241,9 @@ class Functions(
                             .setArtist(updated.artist)
                             .setGenre(updated.genre)
                             .setArtworkUri(updated.picture)
+                            .setReleaseYear(updated.year)
+                            .setReleaseMonth(updated.month)
+                            .setReleaseDay(updated.day)
                             .build()
                         val updatedItem = current.buildUpon()
                             .setMediaMetadata(newMetadata)
@@ -247,8 +254,7 @@ class Functions(
                         onUpdateSong(updated)
                     } catch (e: Exception) {
                         Log.w(
-                            XANDY_CLOUD,
-                            "On update current media item: ${e.stackTraceToString()}"
+                            XANDY_CLOUD, "On update current media item: ${e.printStackTrace()}"
                         )
                     }
                 }
@@ -365,24 +371,99 @@ class Functions(
         withContext(Dispatchers.IO) {
             try {
                 val result = playlistDao.checkIfPlExists(name)
-                if (result > 0) return@withContext InsertResult.Exists
+                if (result > 0) return@withContext Pair(InsertResult.Exists, "")
                 val new = Playlist(name = name, createdOn = Date(), picture = null)
                 playlistDao.addPlWithSongs(songIds, new)
+                return@withContext Pair(InsertResult.Success, new.id)
+            } catch (_: Exception) {
+                return@withContext Pair(InsertResult.Failure, "")
+            }
+        }
+
+    suspend fun changePlaylistName(newName: String, name: String, onUpdate: () -> Unit) =
+        withContext(Dispatchers.IO) {
+            try {
+                val result = playlistDao.checkIfPlExists(newName)
+                if (result > 0) return@withContext InsertResult.Exists
+                playlistDao.updatePlaylistName(newName, name)
+                onUpdate()
                 return@withContext InsertResult.Success
             } catch (_: Exception) {
                 return@withContext InsertResult.Failure
             }
         }
 
-    suspend fun changePlaylistName(newName: String, name: String) =
+    suspend fun updateArtistOfAL(ids: List<String>, artist: String) =
         withContext(Dispatchers.IO) {
             try {
-                val result = playlistDao.checkIfPlExists(newName)
-                if (result > 0) return@withContext InsertResult.Exists
-                playlistDao.updatePlaylistName(newName, name)
-                return@withContext InsertResult.Success
-            } catch (_: Exception) {
-                return@withContext InsertResult.Failure
+                ids.forEachIndexed { index, it ->
+                    val result = updateArtist(context, it.toUri(), artist)
+                    if (!result) Toast.makeText(
+                        context,
+                        "Failed to update artist of song at ${index + 1}", Toast.LENGTH_SHORT
+                    ).show()
+                }
+                audioDao.updateAudioListArtist(ids, artist)
+                return@withContext UpdateResult.Success
+            } catch (e: Exception) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                    (e is RecoverableSecurityException || e is FileNotFoundException)
+                ) {
+                    val uris = ids.map { it.toUri() }
+                    val editRequest = MediaStore.createWriteRequest(context.contentResolver, uris)
+                    return@withContext UpdateResult.FileException(editRequest)
+                }
+                return@withContext UpdateResult.Failure
+            }
+        }
+
+    suspend fun updateAlbumOfAL(ids: List<String>, album: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                ids.forEachIndexed { index, it ->
+                    val result = updateAlbum(context, it.toUri(), album)
+                    if (!result) Toast.makeText(
+                        context,
+                        "Failed to update album of song at ${index + 1}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                audioDao.updateAudioListAlbum(ids, album)
+                return@withContext UpdateResult.Success
+            } catch (e: Exception) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                    (e is RecoverableSecurityException || e is FileNotFoundException)
+                ) {
+                    val uris = ids.map { it.toUri() }
+                    val editRequest = MediaStore.createWriteRequest(context.contentResolver, uris)
+                    return@withContext UpdateResult.FileException(editRequest)
+                }
+                return@withContext UpdateResult.Failure
+            }
+        }
+
+    suspend fun updateGenreOfAL(ids: List<String>, genre: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                ids.forEachIndexed { index, it ->
+                    val result = updateGenre(context, it.toUri(), genre)
+                    if (!result) Toast.makeText(
+                        context,
+                        "Failed to update genre of song at ${index + 1}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                audioDao.updateAudioListGenre(ids, genre)
+                return@withContext UpdateResult.Success
+            } catch (e: Exception) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                    (e is RecoverableSecurityException || e is FileNotFoundException)
+                ) {
+                    val uris = ids.map { it.toUri() }
+                    val editRequest = MediaStore.createWriteRequest(context.contentResolver, uris)
+                    return@withContext UpdateResult.FileException(editRequest)
+                }
+                return@withContext UpdateResult.Failure
             }
         }
 }

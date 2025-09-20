@@ -28,6 +28,7 @@ interface UIRepository {
     fun updateQuery(new: String)
     fun startAdding(pickedSL: List<AudioFile>)
     fun startSelectingSongs(songId: String)
+    /** End the selection, clear the list, and stop adding (if adding) */
     fun endSelect()
 
     fun toggleSong(songId: String)

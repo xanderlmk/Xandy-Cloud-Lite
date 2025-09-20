@@ -59,6 +59,12 @@ data class AudioFile(
     val album: String?,
     val genre: String?,
     val durationMillis: Long,
+    @ColumnInfo(defaultValue = "'NULL'")
+    val year: Int? = null,
+    @ColumnInfo(defaultValue = "'NULL'")
+    val day: Int? = null,
+    @ColumnInfo(defaultValue = "'NULL'")
+    val month: Int? = null,
     val picture: Uri,
     val createdOn: Date,
     @ColumnInfo(defaultValue = "false")
@@ -71,20 +77,7 @@ data class AudioFile(
     val volumeName: String? = null
 ) : Parcelable
 
-fun List<AudioFile>.toMediaItems() = map { song ->
-    MediaItem.Builder()
-        .setMediaId(song.uri.toString())
-        .setUri(song.uri)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setArtist(song.artist)
-                .setTitle(song.title)
-                .setGenre(song.genre)
-                .setArtworkUri(song.picture)
-                .build()
-        )
-        .build()
-}
+fun List<AudioFile>.toMediaItems() = map { song -> song.toMediaItem() }
 
 fun AudioFile.toMediaItem() = MediaItem.Builder()
     .setMediaId(this.uri.toString())
@@ -95,6 +88,9 @@ fun AudioFile.toMediaItem() = MediaItem.Builder()
             .setTitle(this.title)
             .setGenre(this.genre)
             .setArtworkUri(this.picture)
+            .setReleaseYear(this.year)
+            .setReleaseDay(this.day)
+            .setReleaseMonth(this.month)
             .build()
     )
     .build()
@@ -106,11 +102,32 @@ fun List<AudioFile>.toMediaItemsWithCreatedOn() = this.map { audio ->
     MediaItemWithCreatedOn(audio.toMediaItem(), audio.createdOn)
 }
 
+/**
+ * Convert the year, month, and day into a formatted string such where
+ *
+ * If none is missing: yyyy-mm-dd
+ *
+ * If the day is missing: yyyy-mm
+ *
+ * If the month is missing (and even if the day is included): yyyy
+ *
+ * Else: null
+ */
+fun AudioFile.datedString() = when {
+    this.year != null && this.month != null && this.day != null ->
+        "${this.year}-${this.month}-${this.day}"
+
+    this.year != null && this.month != null -> "${this.year}-${this.month}"
+    this.year != null -> "${this.year}"
+    else -> null
+}
+
 fun MediaItem.toAudioFile(unknownTrackUri: Uri) = AudioFile(
     uri = this.itemKey().toUri(), title = this.title(), artist = this.artist(),
     album = this.album(), durationMillis = this.mediaMetadata.durationMs ?: 0L,
     displayName = displayTitle(), picture = this.artwork() ?: unknownTrackUri,
-    genre = this.genre(), createdOn = Date()
+    genre = this.genre(), createdOn = Date(),
+    year = this.year(), day = this.day(), month = this.month()
 )
 
 private const val UNKNOWN = "Unknown Title"
@@ -120,3 +137,7 @@ private fun MediaItem.genre() = this.mediaMetadata.genre?.toString()
 private fun MediaItem.artwork() = this.mediaMetadata.artworkUri
 private fun MediaItem.album() = this.mediaMetadata.albumTitle?.toString()
 private fun MediaItem.displayTitle() = this.mediaMetadata.displayTitle?.toString() ?: UNKNOWN
+
+private fun MediaItem.year() = this.mediaMetadata.releaseYear
+private fun MediaItem.day() = this.mediaMetadata.releaseDay
+private fun MediaItem.month() = this.mediaMetadata.releaseMonth

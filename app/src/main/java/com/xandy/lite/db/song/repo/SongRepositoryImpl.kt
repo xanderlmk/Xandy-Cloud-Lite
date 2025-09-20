@@ -144,7 +144,7 @@ class SongRepositoryImpl(
 
     override suspend fun addLocalPlaylist(name: String) = functions.addLocalPlaylist(name.trim())
 
-    override suspend fun updateLocalPlIndex(idx: Int) = llStates.updateLocalPlIndex(idx)
+    override suspend fun updateLocalPlUUID(n: String) = llStates.updateLocalPlUUID(n)
     override suspend fun updateLocalAlbumName(n: String) = llStates.updateLocalAlbumName(n)
     override suspend fun updateLocalArtistName(n: String) = llStates.updateLocalArtistName(n)
     override suspend fun updateLocalBucketKey(p: Pair<String, Long>) =
@@ -152,9 +152,9 @@ class SongRepositoryImpl(
 
     override suspend fun updateLocalGenreName(n: String) = llStates.updateLocalGenreName(n)
 
-    override suspend fun findPlaylistIdx(name: String) =
-        functions.findPlaylistIdx(name, localPlaylists.toPlaylists().first().toSet()) { idx ->
-            updateLocalPlIndex(idx)
+    override suspend fun findPlaylistUUID(name: String) =
+        functions.findPlaylistUUID(name, localPlaylists.toPlaylists().first().toSet()) { n ->
+            updateLocalPlUUID(n)
         }
 
     override suspend fun addLocalSongsToPl(songIds: List<String>, playlistId: String) =
@@ -220,8 +220,19 @@ class SongRepositoryImpl(
     override suspend fun updatePLSongOrder(order: PlaylistSongOrder) =
         playlistDao.updatePLOrder(order)
 
-    override suspend fun changePlaylistName(newName: String, name: String) =
-        functions.changePlaylistName(newName, name)
+    override suspend fun changePlaylistName(newName: String, name: String, pickedPlUUID: String?) =
+        functions.changePlaylistName(newName, name) {
+            scope.launch {
+                if (name == pickedPlUUID) updateLocalPlUUID(newName)
+            }
+        }
+
+    override suspend fun updateArtistOfAL(ids: List<String>, artist: String) =
+        functions.updateArtistOfAL(ids, artist)
+    override suspend fun updateAlbumOfAL(ids: List<String>, album: String) =
+        functions.updateAlbumOfAL(ids, album)
+    override suspend fun updateGenreOfAL(ids: List<String>, genre: String) =
+        functions.updateGenreOfAL(ids, genre)
 
     override fun autoUpdateEnabled() = llStates.autoUpdateEnabled()
     override fun toggleAutoUpdate(enabled: Boolean) = llStates.toggleAutoUpdate(enabled)

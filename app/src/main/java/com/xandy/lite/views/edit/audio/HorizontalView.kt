@@ -33,6 +33,8 @@ import coil.request.ImageRequest
 import com.xandy.lite.R
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.ui.theme.GetUIStyle
+import my.nanihadesuka.compose.ColumnScrollbar
+import my.nanihadesuka.compose.ScrollbarSettings
 
 
 @Composable
@@ -40,57 +42,79 @@ fun HorizontalEditAudioView(
     audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean,
     onUpdate: (AudioFile) -> Unit, allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle
 ) {
+    val scrollState = rememberScrollState()
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        Column(
+        ColumnScrollbar(
+            state = scrollState,
+            settings = ScrollbarSettings(
+                thumbSelectedColor = getUIStyle.selectedThumbColor(),
+                thumbUnselectedColor = getUIStyle.unSelectedThumbColor()
+            ),
             modifier = Modifier
                 .fillMaxWidth(0.55f)
                 .fillMaxHeight()
-                .verticalScroll(rememberScrollState())
-                .align(Alignment.TopStart),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+                .align(Alignment.TopStart)
         ) {
-            Text(text = "Title", textDecoration = TextDecoration.Underline)
-            TextField(
-                value = audio.title, onValueChange = { onAudioChange(audio.copy(title = it)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-            )
-
-            Text(text = "Artist", textDecoration = TextDecoration.Underline)
-            TextField(
-                value = audio.artist, onValueChange = { onAudioChange(audio.copy(artist = it)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-            )
-            Text(text = "Genre", textDecoration = TextDecoration.Underline)
-            TextField(
-                value = audio.genre ?: "",
-                placeholder = { Text("No genre set yet") },
-                onValueChange = { onAudioChange(audio.copy(genre = it)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences
+            Column(
+                modifier = Modifier.verticalScroll(scrollState),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(text = "Title", textDecoration = TextDecoration.Underline)
+                TextField(
+                    value = audio.title, onValueChange = { onAudioChange(audio.copy(title = it)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                 )
-            )
-            Text(text = "Album", textDecoration = TextDecoration.Underline)
-            TextField(
-                value = audio.album ?: "",
-                placeholder = { Text("No album set yet") },
-                onValueChange = { onAudioChange(audio.copy(album = it)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-            )
+
+                Text(text = "Artist", textDecoration = TextDecoration.Underline)
+                TextField(
+                    value = audio.artist,
+                    onValueChange = { onAudioChange(audio.copy(artist = it)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                )
+                Text(text = "Genre", textDecoration = TextDecoration.Underline)
+                TextField(
+                    value = audio.genre ?: "",
+                    placeholder = { Text("No genre set yet") },
+                    onValueChange = { onAudioChange(audio.copy(genre = it)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Done,
+                        capitalization = KeyboardCapitalization.Sentences
+                    )
+                )
+                Text(text = "Album", textDecoration = TextDecoration.Underline)
+                TextField(
+                    value = audio.album ?: "",
+                    placeholder = { Text("No album set yet") },
+                    onValueChange = { onAudioChange(audio.copy(album = it)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                )
+                Text(text = "Release Date", textDecoration = TextDecoration.Underline)
+                DateChooser(
+                    minYear = 1900, getUIStyle = getUIStyle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    selectedDay = audio.day, selectedYear = audio.year, selectedMonth = audio.month,
+                    onYearSelected = { onAudioChange(audio.copy(year = it)) },
+                    onDaySelected = { if (audio.month != null) onAudioChange(audio.copy(day = it)) },
+                    onMonthSelected = { onAudioChange(audio.copy(month = it)) }
+                )
+            }
         }
         Column(
             modifier = Modifier

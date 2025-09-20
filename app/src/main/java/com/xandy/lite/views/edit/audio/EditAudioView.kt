@@ -13,29 +13,47 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.PopupProperties
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.ui.functions.SelectImageModal
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.theme.GetUIStyle
 import my.nanihadesuka.compose.LazyColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
+import java.time.Month
+import java.time.Year
+import java.time.YearMonth
+import java.time.format.TextStyle
+import java.util.Locale
 
 
 @Composable
@@ -181,6 +199,111 @@ private fun LocalArtwork(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun DateChooser(
+    minYear: Int, maxYear: Int = Year.now().value, getUIStyle: GetUIStyle,
+    selectedYear: Int?, selectedMonth: Int?, selectedDay: Int?,
+    onYearSelected: (Int?) -> Unit, onMonthSelected: (Int?) -> Unit, onDaySelected: (Int?) -> Unit,
+    modifier: Modifier
+) {
+    val years = (minYear..maxYear).toList().reversed()
+    val monthNames =
+        Month.entries.map { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
+
+    // compute days in selected month/year (if both present)
+    val daysInMonth = try {
+        if (selectedYear != null && selectedMonth != null && selectedMonth in 1..12)
+            YearMonth.of(selectedYear, selectedMonth).lengthOfMonth() else null
+    } catch (_: Exception) {
+        null
+    }
+    Row(modifier = modifier) {
+        SimpleDropdown(
+            label = "Year", options = years.map { it.toString() },
+            selectedIndex = selectedYear?.let { years.indexOf(it) } ?: -1,
+            onSelectIndex = { idx -> onYearSelected(if (idx >= 0) years[idx] else null) },
+            modifier = Modifier.weight(1f)
+        )
+        SimpleDropdown(
+            label = "Month",
+            options = listOf("—") + monthNames, // index 0 = none, indexes 1..12 = months
+            selectedIndex = selectedMonth?.let {
+                if (it in 1..12) it else -1
+            }?.let { if (it == -1) -1 else it } ?: (0),
+            onSelectIndex = { idx ->
+                onMonthSelected(
+                    when (idx) {
+                        0 -> null
+                        in 1..12 -> idx
+                        else -> null
+                    }
+                )
+            },
+            modifier = Modifier.weight(1f)
+        )
+
+        val dayOptions =
+            if (daysInMonth != null) listOf("—") + (1..daysInMonth).map { it.toString() }
+            else listOf()
+
+
+        SimpleDropdown(
+            label = "Day",
+            tint = if (dayOptions.isEmpty()) getUIStyle.disabledThemedColor()
+            else getUIStyle.themedColor(),
+            options = dayOptions,
+            selectedIndex = selectedDay ?: 0,
+            onSelectIndex = { idx -> onDaySelected(if (idx == 0) null else idx) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun SimpleDropdown(
+    label: String, options: List<String>, selectedIndex: Int, onSelectIndex: (Int) -> Unit,
+    tint: Color = LocalContentColor.current, modifier: Modifier = Modifier
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val displayText = if (selectedIndex in options.indices) options[selectedIndex] else "—"
+
+    Box(
+        modifier = modifier
+            .padding(4.dp)
+            .wrapContentSize(Alignment.Center)
+    ) {
+        OutlinedTextField(
+            value = displayText,
+            onValueChange = { },
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier
+                        .clickable(enabled = options.isNotEmpty()) { expanded = !expanded }
+                )
+            },
+        )
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = 500.dp),
+            properties = PopupProperties(clippingEnabled = false)
+        ) {
+            options.forEachIndexed { idx, opt ->
+                DropdownMenuItem(
+                    onClick = { onSelectIndex(idx); expanded = false },
+                    text = { Text(opt, style = MaterialTheme.typography.bodyMedium) }
+                )
             }
         }
     }

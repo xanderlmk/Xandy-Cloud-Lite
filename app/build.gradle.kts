@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-
     alias(libs.plugins.ksp)
     alias(libs.plugins.serialization)
     alias(libs.plugins.parcelize)
@@ -16,19 +15,18 @@ android {
         applicationId = "com.xandy.lite"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 13
+        versionName = "1.0.152"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { this.debugSymbolLevel = "SYMBOL_TABLE" }
-
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
         }
         debug {

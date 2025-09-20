@@ -20,7 +20,8 @@ suspend fun updateTags(
 ): Boolean = withContext(Dispatchers.IO) {
     try {
         context.contentResolver.openFileDescriptor(audioUri, "rw")?.use { fd ->
-            val metadata = TagLib.getMetadata(fd.dup().detachFd(), readPictures = true) ?: return@withContext false
+            val metadata = TagLib.getMetadata(fd.dup().detachFd(), readPictures = true)
+                ?: return@withContext false
             val propMap = metadata.propertyMap
             val new = propMap.apply { this[key] = arrayOf(newValue) }
             return@use TagLib.savePropertyMap(fd.dup().detachFd(), new)
@@ -48,13 +49,16 @@ suspend fun updateGenre(
     context: Context, audioUri: Uri, newGenre: String
 ): Boolean = updateTags(context, audioUri, TagProperty.GENRE, newGenre)
 
-suspend fun updateAlbum(context: Context, audioUri: Uri, newAlbum: String
+suspend fun updateAlbum(
+    context: Context, audioUri: Uri, newAlbum: String
 ): Boolean = updateTags(context, audioUri, TagProperty.ALBUM, newAlbum)
 
+suspend fun updateReleaseDate(
+    context: Context, audioUri: Uri, newDate: String
+): Boolean = updateTags(context, audioUri, TagProperty.ALBUM, newDate)
+
 suspend fun updateArtwork(
-    context: Context,
-    audioUri: Uri,
-    imageUri: Uri
+    context: Context, audioUri: Uri, imageUri: Uri
 ): Pair<Boolean, Uri> = withContext(Dispatchers.IO) {
     if (imageUri.scheme == "android.resource"
         && imageUri.path?.contains("drawable/unknown_track") == true
@@ -71,7 +75,7 @@ suspend fun updateArtwork(
         context.contentResolver
             .openFileDescriptor(audioUri, "rw")?.use { fd ->
                 val success = TagLib.savePictures(fd.dup().detachFd(), arrayOf(picture))
-                if(success) {
+                if (success) {
                     val newPicture = TagLib.getPictures(fd.dup().detachFd()).first().data
                     val cacheFile = File(context.cacheDir, "embedded_art_${UUID.randomUUID()}.jpg")
                     cacheFile.outputStream().use { it.write(newPicture) }

@@ -115,6 +115,8 @@ class NavViewModel(
     fun updatePosition(position: Long) = songRepository.updatePosition(position)
 
     fun startAdding(songs: List<AudioFile>) = uiRepository.startAdding(songs)
+
+    /** End the selection, clear the list, and stop adding (if adding) */
     fun endSelect() = uiRepository.endSelect()
 
     fun getSelectedSongIds() = uiRepository.selectedSongIds.value
@@ -195,12 +197,12 @@ class NavViewModel(
     }
 
     suspend fun insertLocalPl(name: String) = songRepository.addLocalPlaylist(name)
-    fun updatePLIndex(idx: Int) = viewModelScope.launch {
-        songRepository.updateLocalPlIndex(idx)
+    fun updatePlUUID(s: String) = viewModelScope.launch {
+        songRepository.updateLocalPlUUID(s)
     }
 
-    fun navToPlaylist(name: String) = viewModelScope.launch {
-        songRepository.findPlaylistIdx(name).takeIf { it >= 0 } ?: return@launch
+    fun navToPlaylist(uuid: String) = viewModelScope.launch {
+        songRepository.findPlaylistUUID(uuid).takeIf { it.isNotBlank() } ?: return@launch
     }
 
     fun updateAlbumName(str: String) = viewModelScope.launch {
@@ -245,7 +247,7 @@ class NavViewModel(
         songRepository.updatePlArtwork(name = pl.name, newPic = newPic, currentPic = pl.picture)
 
     suspend fun changePlName(newName: String, name: String) =
-        songRepository.changePlaylistName(newName, name)
+        songRepository.changePlaylistName(newName, name, plWithAudio.value?.playlist?.id)
 
 
     fun getMediaController() = songRepository.getMediaController()
@@ -253,6 +255,18 @@ class NavViewModel(
     init {
         if (songRepository.autoUpdateEnabled()) viewModelScope.launch { updateAudioFiles() }
     }
+
+    suspend fun updateArtistsOfAL(ids: List<String>, artist: String) =
+        songRepository.updateArtistOfAL(ids, artist)
+
+
+    suspend fun updateAlbumOfAL(ids: List<String>, album: String) =
+        songRepository.updateAlbumOfAL(ids, album)
+
+
+    suspend fun updateGenreOfAL(ids: List<String>, genre: String) =
+        songRepository.updateGenreOfAL(ids, genre)
+
 }
 
 

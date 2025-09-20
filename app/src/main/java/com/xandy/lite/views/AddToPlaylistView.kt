@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,16 +34,16 @@ import com.xandy.lite.ui.theme.GetUIStyle
 @Composable
 fun AddToPlaylistView(
     getUIStyle: GetUIStyle, modifier: Modifier, vm: AddToLocalPlVM,
-    onAdd: (String) -> Unit, onAddNew: (String) -> Unit, enabled: Boolean
+    onAdd: (String) -> Unit, onAddNew: (String) -> Unit, enabled: Boolean,
+    showDialog: MutableState<Boolean>
 ) {
-    var showDialog by rememberSaveable { mutableStateOf(false) }
     val pls by vm.pls.collectAsStateWithLifecycle()
     val ci = ContentIcons(getUIStyle)
 
     Box(modifier = modifier) {
         AddPlDialog(
-            showDialog = showDialog, getUIStyle = getUIStyle, enabled = enabled,
-            onDismiss = {  if (enabled) showDialog = false },
+            showDialog = showDialog.value, getUIStyle = getUIStyle, enabled = enabled,
+            onDismiss = {  if (enabled) showDialog.value = false },
             onSubmit = { onAddNew(it) },
         )
         LazyColumn(modifier = Modifier.fillMaxWidth()) {
@@ -51,7 +52,7 @@ fun AddToPlaylistView(
                     Modifier
                         .fillMaxWidth()
                         .height(60.dp)
-                        .clickable { showDialog = true }
+                        .clickable { showDialog.value = true }
                         .border(2.dp, getUIStyle.themedColor(), RoundedCornerShape(2.dp))
                         .padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -62,7 +63,7 @@ fun AddToPlaylistView(
                 }
             }
             items(pls) { pl ->
-                PlaylistRow(pl, getUIStyle) { onAdd(pl.name) }
+                PlaylistRow(pl, getUIStyle) { onAdd(pl.id) }
             }
         }
     }

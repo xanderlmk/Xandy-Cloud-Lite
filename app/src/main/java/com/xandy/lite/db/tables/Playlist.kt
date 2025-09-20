@@ -12,13 +12,17 @@ import com.xandy.lite.models.ui.order.by.OBS
 import com.xandy.lite.models.ui.order.by.OrderSongsBy
 import kotlinx.parcelize.Parcelize
 import java.util.Date
+import java.util.UUID
 
 private const val PLAYLIST_ID = "playlist_id"
 
 @Parcelize
-@Entity(tableName = "local_playlist")
+@Entity(
+    tableName = "local_playlist",
+    indices = [Index(value = [PLAYLIST_ID], name = "pl_name_idx", unique = true)])
 data class Playlist(
     @PrimaryKey
+    val id: String = UUID.randomUUID().toString(),
     @ColumnInfo(name = PLAYLIST_ID)
     val name: String,
     val createdOn: Date,
