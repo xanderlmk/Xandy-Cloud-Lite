@@ -16,3 +16,4 @@ local.properties
 /app/release/
 /app/schemas/
 /app/normal/
+/.kotlin/errors/

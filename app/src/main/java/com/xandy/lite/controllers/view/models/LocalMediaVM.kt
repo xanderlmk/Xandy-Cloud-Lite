@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.collections.filter
+import kotlin.text.isBlank
 
 class LocalMediaVM(
     private val songRepository: SongRepository, private val uiRepository: UIRepository
@@ -61,6 +63,17 @@ class LocalMediaVM(
     val isSelecting = uiRepository.isSelecting
     val query = uiRepository.query
 
+    val filteredAudioFiles = combine(songRepository.audioFiles, uiRepository.query, isSearching) { al, q, s ->
+        al.list.filter { audio ->
+            if (q.isBlank() || !s) return@filter true
+            audio.song.title.contains(q, ignoreCase = true) ||
+                    audio.song.artist.contains(q, ignoreCase = true)
+        }
+    }.stateIn(
+        scope = viewModelScope, started = SharingStarted.Lazily,
+        initialValue = emptyList()
+    )
+
     val selectedSongIds = uiRepository.selectedSongIds
     fun startSelecting(songId: String) = uiRepository.startSelectingSongs(songId)
 
@@ -71,8 +84,7 @@ class LocalMediaVM(
             setQueue(ctrl, list, song) {
                 viewModelScope.launch { songRepository.setNewQueue(it, "") }
             }
-            songRepository.updatePickedSong(song)
-        }
+            songRepository.updatePickedSong(song.id)        }
     }
 
     fun updateTab(tab: LocalMusicTabs) = songRepository.updateLocalTab(tab)
@@ -80,4 +92,11 @@ class LocalMediaVM(
     suspend fun onShowSong(uri: Uri) = songRepository.showAudioFile(uri.toString())
     suspend fun deletePlaylist(playlist: Playlist) =
         songRepository.deleteLocalPlaylist(playlist)
+
+    val lyricsList = songRepository.lyricsFlow().stateIn(
+        scope = viewModelScope, started = SharingStarted.Lazily,
+        initialValue = emptyList()
+    )
+    suspend fun updateSongLyrics(lyricsId:String, songUri: String) =
+        songRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
 }

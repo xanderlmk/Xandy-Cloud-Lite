@@ -9,10 +9,10 @@ import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Playlist
 import com.xandy.lite.db.tables.PlaylistSongOrder
-import com.xandy.lite.models.ui.AudioUIState
 import com.xandy.lite.models.ui.order.by.OrderSongsBy
 import com.xandy.lite.navigation.UIRepository
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -24,10 +24,6 @@ class LocalPLVM(
         private const val TIMEOUT_MILLIS = 4_000L
     }
 
-    val allSongs = songRepository.audioFiles.stateIn(
-        scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
-        initialValue = AudioUIState()
-    )
     val plWithAudio = songRepository.pickedPlaylist.stateIn(
         scope = viewModelScope, started = SharingStarted.Lazily,
         initialValue = null
@@ -50,6 +46,17 @@ class LocalPLVM(
         initialValue = ""
     )
 
+    val filteredAudioFiles = combine(songRepository.audioFiles, query, isSearching) { al, q, s ->
+        al.list.filter { audio ->
+            if (q.isBlank() || !s) return@filter true
+            audio.song.title.contains(q, ignoreCase = true) ||
+                    audio.song.artist.contains(q, ignoreCase = true)
+        }
+    }.stateIn(
+        scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+        initialValue = emptyList()
+    )
+
     fun startSelecting(songId: String) = uiRepository.startSelectingSongs(songId)
 
     fun toggleSong(songId: String) = uiRepository.toggleSong(songId)
@@ -59,8 +66,7 @@ class LocalPLVM(
             setQueue(ctrl, list, song) {
                 viewModelScope.launch { songRepository.setNewQueue(it, plName) }
             }
-            songRepository.updatePickedSong(song)
-        }
+            songRepository.updatePickedSong(song.id)        }
     }
 
     fun setShuffleOn(song: AudioFile, list: List<AudioFile>, plName: String) =
@@ -80,4 +86,10 @@ class LocalPLVM(
         val new = PlaylistSongOrder(pl.name, orderBy)
         songRepository.updatePLSongOrder(new)
     }
+    val lyricsList = songRepository.lyricsFlow().stateIn(
+        scope = viewModelScope, started = SharingStarted.Lazily,
+        initialValue = emptyList()
+    )
+    suspend fun updateSongLyrics(lyricsId:String, songUri: String) =
+        songRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
 }

@@ -17,8 +17,10 @@ import com.xandy.lite.db.daos.AudioDao
 import com.xandy.lite.db.daos.BucketDao
 import com.xandy.lite.db.daos.PlaylistDao
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.db.tables.Playlist
 import com.xandy.lite.db.tables.PlaylistSongOrder
+import com.xandy.lite.models.AudioIds
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.dataStore
 import com.xandy.lite.models.ui.LocalMusicTabs
@@ -33,6 +35,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -40,13 +44,12 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SongRepositoryImpl(
-    private val unknownTrackUri: Uri, private val context: Context,
+    unknownTrackUri: Uri, private val context: Context,
     appPref: SharedPreferences, private val audioDao: AudioDao,
     private val playlistDao: PlaylistDao, bucketDao: BucketDao,
     private val scope: CoroutineScope
 ) : SongRepository {
     companion object {
-        private const val DELAYED_CHECK = 850L
         private val CURRENT_MI = stringPreferencesKey("current_media_item")
     }
 
@@ -66,12 +69,11 @@ class SongRepositoryImpl(
     override val songDetails =
         combineMCWithPickedSong(mediaController, pickedSong, unknownTrackUri)
 
-    override fun updatePickedSong(song: AudioFile?) {
+    override fun updatePickedSong(id: String) {
         scope.launch {
-            val uri = song?.uri ?: return@launch
             try {
                 context.dataStore.edit { preferences ->
-                    preferences[CURRENT_MI] = uri.toString()
+                    preferences[CURRENT_MI] = id
                 }
             } catch (e: Exception) {
                 Log.e(XANDY_CLOUD, "Failed to get media key: $e")
@@ -130,6 +132,8 @@ class SongRepositoryImpl(
     override val localGenres = llStates.localGenres
     override val pickedLocalGenre = llStates.pickedLocalGenre
 
+    override val idWritingEnabled = llStates.songIdWritingEnabled
+
     override fun updateLocalALOrder(orderSongsBy: OrderSongsBy) =
         mcStates.updateLocalALOrder(orderSongsBy)
 
@@ -139,6 +143,8 @@ class SongRepositoryImpl(
     override suspend fun updateMediaFiles() = functions.updateMediaFiles(
         onProgress = { p -> _percentFetched.update { p } },
     ) { loading -> _filesLoading.update { loading } }
+
+    override suspend fun updateSongIdTag(ids: List<AudioIds>) = functions.updateSongIdTag(ids)
 
     override fun updateLocalTab(tab: LocalMusicTabs) = _localTab.update { tab }
 
@@ -151,6 +157,8 @@ class SongRepositoryImpl(
         llStates.updateLocalBucketKey(p)
 
     override suspend fun updateLocalGenreName(n: String) = llStates.updateLocalGenreName(n)
+
+    override suspend fun toggleIdWriting(e: Boolean) = llStates.updateIdWritingEnabled(e)
 
     override suspend fun findPlaylistUUID(name: String) =
         functions.findPlaylistUUID(name, localPlaylists.toPlaylists().first().toSet()) { n ->
@@ -166,7 +174,7 @@ class SongRepositoryImpl(
     override suspend fun hideBuckets(set: Set<Pair<String, Long>>) =
         functions.hideBuckets(set) { loading -> _filesLoading.update { loading } }
 
-    override suspend fun deleteLocalAudios(list: List<Uri>) =
+    override suspend fun deleteLocalAudios(list: List<String>) =
         functions.deleteAudioFiles(list, mediaController.value)
 
     override suspend fun hideAudioFiles(uris: List<String>) = functions.hideAudioFiles(uris)
@@ -174,18 +182,23 @@ class SongRepositoryImpl(
     override suspend fun hideAudioFile(uri: String) = functions.hideAudioFile(uri)
     override suspend fun showAudioFile(uri: String) = functions.showAudioFile(uri)
 
-    override suspend fun updateAudioTags(newAudio: AudioFile) =
-        functions.updateAudioTags(newAudio, mediaController.value) { updatePickedSong(it) }
 
-    override fun getPickedAudio(uri: String) = audioDao.getFlowOfPickedAudio(uri)
+    private val audioUri = MutableStateFlow("")
+    override fun updateAudioUri(uri: String) = audioUri.update { uri }
+
+    override val pickedAudio = audioUri.flatMapLatest { uri ->
+        if (uri.isEmpty()) flowOf(null)
+        else audioDao.getFlowOfPickedAudio(uri)
+    }
+
+    override suspend fun updateAudioTags(newAudio: AudioFile, lyrics: Lyrics?) =
+        functions.updateAudioTags(newAudio, mediaController.value, lyrics) {
+            updatePickedSong(it.id)
+        }
 
     override suspend fun deleteLocalPlaylist(playlist: Playlist) =
         functions.deleteLocalPlaylist(playlist)
 
-    override suspend fun updatePickedSong(songId: String) =
-        functions.updatePickedSong(
-            songId, (DELAYED_CHECK * 2), unknownTrackUri, audioFiles, mediaController.value
-        ) { song -> updatePickedSong(song) }
 
     override suspend fun addPlWithSongs(songIds: List<String>, name: String) =
         functions.addPlWithSongs(songIds, name)
@@ -229,10 +242,23 @@ class SongRepositoryImpl(
 
     override suspend fun updateArtistOfAL(ids: List<String>, artist: String) =
         functions.updateArtistOfAL(ids, artist)
+
     override suspend fun updateAlbumOfAL(ids: List<String>, album: String) =
         functions.updateAlbumOfAL(ids, album)
+
     override suspend fun updateGenreOfAL(ids: List<String>, genre: String) =
         functions.updateGenreOfAL(ids, genre)
+
+    override fun lyricsFlow() = audioDao.getLyricsWithAudio()
+
+    override suspend fun updateSongLyrics(lyricsId: String, songUri: String) =
+        functions.updateSongLyrics(lyricsId = lyricsId, songUri)
+
+    override suspend fun updateLyrics(lyrics: Lyrics) =
+        functions.updateLyrics(lyrics)
+
+    override suspend fun deleteLyrics(lyrics: Lyrics) =
+        functions.deleteLyrics(lyrics)
 
     override fun autoUpdateEnabled() = llStates.autoUpdateEnabled()
     override fun toggleAutoUpdate(enabled: Boolean) = llStates.toggleAutoUpdate(enabled)

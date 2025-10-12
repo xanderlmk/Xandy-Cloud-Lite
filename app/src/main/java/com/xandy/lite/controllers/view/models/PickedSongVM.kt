@@ -1,11 +1,8 @@
 package com.xandy.lite.controllers.view.models
 
-import android.util.Log
 import androidx.annotation.OptIn
-import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
@@ -74,15 +71,11 @@ class PickedSongVM(private val songRepository: SongRepository) : ViewModel() {
     fun updateIsPlaying(isPlaying: Boolean) = songRepository.updateIsPlaying(isPlaying)
     fun updateIsLoading(isLoading: Boolean) = songRepository.updateIsLoading(isLoading)
 
-    fun updatePickedSong(item: MediaItem?) {
-        val targetUri = item?.requestMetadata?.mediaUri
-            ?: item?.localConfiguration?.uri ?: item?.mediaId?.toUri()
-        if (targetUri == null) {
-            Log.e("Xandy-Cloud", "Failed to get uri"); return
+    fun updatePickedSong(id: String?) {
+        viewModelScope.launch {
+            id ?: return@launch
+            songRepository.updatePickedSong(id)
         }
-        val song =  audioFiles.value.list.find { it.song.uri == targetUri }?.song
-        if (song == null) Log.e("Xandy-Cloud", "Failed to find song.")
-        songRepository.updatePickedSong(song)
     }
 
     fun updateDuration(duration: Long) = songRepository.updateDuration(duration)

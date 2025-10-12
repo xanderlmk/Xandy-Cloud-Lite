@@ -1,13 +1,17 @@
 package com.xandy.lite.db.song.repo
 
+import android.app.PendingIntent
 import android.net.Uri
 import androidx.media3.common.Tracks
 import androidx.media3.session.MediaController
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.BucketWithAudio
 import com.xandy.lite.db.tables.AudioWithPls
+import com.xandy.lite.db.tables.Lyrics
+import com.xandy.lite.db.tables.LyricsWithAudio
 import com.xandy.lite.db.tables.Playlist
 import com.xandy.lite.db.tables.PlaylistSongOrder
+import com.xandy.lite.models.AudioIds
 import com.xandy.lite.models.ui.Album
 import com.xandy.lite.models.ui.Artist
 import com.xandy.lite.models.ui.AudioUIState
@@ -38,7 +42,11 @@ interface SongRepository {
     val repeatMode: Flow<Int>
     val shuffleEnabled: Flow<Boolean>
     val durationMs: StateFlow<Long>
+
+    /** Song position in milliseconds */
     val positionMs: StateFlow<Long>
+
+    /** Sorted Queue based on [OrderQueueBy] */
     val sortedQueue: Flow<List<MediaItemWithCreatedOn>>
 
     /**
@@ -65,8 +73,7 @@ interface SongRepository {
     /** Song Details of the current media item or picked song */
     val songDetails: Flow<SongDetails?>
 
-    fun updatePickedSong(song: AudioFile?)
-    suspend fun updatePickedSong(songId: String)
+    fun updatePickedSong(id: String)
 
     /* <-- Local audio files --> */
     val audioOrderedBy: StateFlow<OrderSongsBy>
@@ -85,7 +92,8 @@ interface SongRepository {
     /** Local playlists with their songs, and the count of songs it has */
     val localPlaylists: Flow<LocalPlUIState>
     val filesLoading: StateFlow<Boolean>
-    suspend fun updateMediaFiles()
+    suspend fun updateMediaFiles(): Pair<PendingIntent, List<AudioIds>>?
+    suspend fun updateSongIdTag(ids: List<AudioIds>): Boolean
 
     /** Update local playlist artwork */
     suspend fun updatePlArtwork(name: String, newPic: Uri, currentPic: Uri?)
@@ -114,8 +122,15 @@ interface SongRepository {
     val pickedLocalGenre: Flow<Genre?>
     suspend fun updateLocalGenreName(n: String)
 
+    /** A flow of all the lyrics available. */
+    fun lyricsFlow(): Flow<List<LyricsWithAudio>>
+    suspend fun updateSongLyrics(lyricsId: String, songUri: String): Boolean
+    suspend fun updateLyrics(lyrics: Lyrics): Boolean
+
+    suspend fun deleteLyrics(lyrics: Lyrics): Boolean
+
     /** Delete the audio file from the system and the db */
-    suspend fun deleteLocalAudios(list: List<Uri>): DeleteResult
+    suspend fun deleteLocalAudios(list: List<String>): DeleteResult
 
     /** Permanently hide selected audio files. */
     suspend fun hideAudioFiles(uris: List<String>): Boolean
@@ -128,8 +143,11 @@ interface SongRepository {
 
     /** Show the hidden file */
     suspend fun showAudioFile(uri: String): Boolean
-    suspend fun updateAudioTags(newAudio: AudioFile): UpdateResult
-    fun getPickedAudio(uri: String): Flow<AudioWithPls?>
+    suspend fun updateAudioTags(newAudio: AudioFile, lyrics: Lyrics?): UpdateResult
+    /** Update picked audio uri */
+    fun updateAudioUri(uri: String)
+    /** Maps the lastest value of the audioUri */
+    val pickedAudio: Flow<AudioWithPls?>
     suspend fun deleteLocalPlaylist(playlist: Playlist): Boolean
     suspend fun addPlWithSongs(songIds: List<String>, name: String): Pair<InsertResult, String>
     suspend fun updatePLSongOrder(order: PlaylistSongOrder)
@@ -145,8 +163,14 @@ interface SongRepository {
     fun autoUpdateEnabled(): Boolean
     fun toggleAutoUpdate(enabled: Boolean)
     val autoUpdate: StateFlow<Boolean>
+
     /** Update artist of the selected song/audio list */
     suspend fun updateArtistOfAL(ids: List<String>, artist: String): UpdateResult
+    /** Update album of the selected song/audio list */
     suspend fun updateAlbumOfAL(ids: List<String>, album: String): UpdateResult
+    /** Update genre of the selected song/audio list */
     suspend fun updateGenreOfAL(ids: List<String>, genre: String): UpdateResult
+
+    val idWritingEnabled: Flow<Boolean>
+    suspend fun toggleIdWriting(e : Boolean)
 }

@@ -15,6 +15,8 @@ import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.AudioWithPls
 import com.xandy.lite.db.tables.BucketWithAudio
 import com.xandy.lite.db.tables.toMediaItemsWithCreatedOn
+import com.xandy.lite.models.application.XANDY_CLOUD
+import com.xandy.lite.models.itemKey
 import com.xandy.lite.models.ui.Album
 import com.xandy.lite.models.ui.Artist
 import com.xandy.lite.models.ui.AudioUIState
@@ -23,7 +25,6 @@ import com.xandy.lite.models.ui.LocalPlUIState
 import com.xandy.lite.models.ui.MediaItemWithCreatedOn
 import com.xandy.lite.models.ui.PlaylistWithCount
 import com.xandy.lite.models.ui.SongDetails
-import com.xandy.lite.models.ui.itemKey
 import com.xandy.lite.models.ui.order.by.OrderPlsBy
 import com.xandy.lite.models.ui.order.by.OrderQueueBy
 import com.xandy.lite.models.ui.order.by.OrderSongsBy
@@ -153,23 +154,27 @@ fun combineMCWithPickedSong(
 ): Flow<SongDetails?> = combine(mediaController, pickedSong) { controller, a ->
     val mediaMetadata = controller?.currentMediaItem?.mediaMetadata
     val id =
-        a?.song?.uri?.toString() ?: controller?.currentMediaItem?.itemKey() ?: return@combine null
+        a?.song?.id ?: controller?.currentMediaItem?.itemKey() ?: return@combine null
     if (mediaMetadata == null && a == null) null
     else {
-        val sd = combineSongWithMediaMetadata(a?.song, mediaMetadata, unknownTrackUri, id)
+        val sd = combineSongWithMediaMetadata(a, mediaMetadata, unknownTrackUri, id)
         Log.i("Xandy-Cloud", "$sd")
         sd
     }
 }.flowOn(Dispatchers.Main.limitedParallelism(1, "Song Details"))
 
 private fun combineSongWithMediaMetadata(
-    song: AudioFile?, item: MediaMetadata?, unknownTrackUri: Uri, id: String
+    af: AudioWithPls?, item: MediaMetadata?, unknownTrackUri: Uri, id: String
 ): SongDetails {
-    val title = song?.title ?: item?.title ?: "Unknown Title"
-    val artist = song?.artist ?: item?.artist ?: "Unknown Artist"
-    val album = song?.album ?: item?.albumTitle
-    val artwork = song?.picture ?: item?.artworkUri ?: unknownTrackUri
-    return SongDetails(id, title.toString(), artist.toString(), album?.toString(), artwork)
+    val title = af?.song?.title ?: item?.title ?: "Unknown Title"
+    val artist = af?.song?.artist ?: item?.artist ?: "Unknown Artist"
+    val album = af?.song?.album ?: item?.albumTitle
+    val artwork = af?.song?.picture ?: item?.artworkUri ?: unknownTrackUri
+    Log.i(XANDY_CLOUD, "${af?.lyrics}")
+
+    return SongDetails(
+        id, title.toString(), artist.toString(), album?.toString(), artwork, af?.lyrics
+    )
 }
 
 fun combinePickedUUIDWithPl(

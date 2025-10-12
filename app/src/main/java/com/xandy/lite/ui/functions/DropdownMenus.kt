@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
@@ -53,8 +54,8 @@ fun LocalAudioOptions(
     onUpdateSongOrder: (SongOrder) -> Unit, onReversePlsOrder: () -> Unit,
     onUpdatePlsOrder: (PlaylistOrder) -> Unit, onSearch: () -> Unit, onHideAudios: () -> Unit,
     onHideFolders: () -> Unit, onAddSongs: () -> Unit, onShareSongs: () -> Unit,
-    onUpdateMetadata: (String) -> Unit, onShowAudios: () -> Unit, onToggleAutoUpdate: () -> Unit,
-    getUIStyle: GetUIStyle
+    onUpdateMetadata: (String) -> Unit, onShowAudios: () -> Unit,
+    onSelectAll: () -> Unit, onDeleteSongs: () -> Unit, getUIStyle: GetUIStyle
 ) {
     val ci = ContentIcons(getUIStyle)
 
@@ -75,13 +76,12 @@ fun LocalAudioOptions(
             if (!audioStates.isSelecting) AllSongOptions(
                 onReverseSongOrder = onReverseSongOrder,
                 onUpdateSongOrder = onUpdateSongOrder,
-                getUIStyle = getUIStyle, asc = audioStates.alDirection,
-                onToggleAutoUpdate = onToggleAutoUpdate,
-                autoUpdateEnabled = audioStates.autoUpdate
+                getUIStyle = getUIStyle, asc = audioStates.alDirection
             )
             else EditSongOptions(
                 onHideOrShow = onHideAudios, onAddSongs = onAddSongs, onShareSongs = onShareSongs,
                 getUIStyle = getUIStyle, hide = true, onUpdateMetadata = onUpdateMetadata,
+                onSelectAll = onSelectAll,onDeleteSongs = onDeleteSongs,
                 enabled = !audioStates.isLoading
             )
 
@@ -119,7 +119,8 @@ fun LocalAudioOptions(
             if (audioStates.isSelecting) EditSongOptions(
                 onHideOrShow = onShowAudios, onAddSongs = onAddSongs,
                 onShareSongs = onShareSongs, getUIStyle = getUIStyle,
-                hide = false, onUpdateMetadata = onUpdateMetadata, enabled = !audioStates.isLoading
+                hide = false, onUpdateMetadata = onUpdateMetadata, onSelectAll = onSelectAll,
+                onDeleteSongs = onDeleteSongs, enabled = !audioStates.isLoading
             )
         }
     }
@@ -241,11 +242,10 @@ private fun PLContent(
 @Composable
 private fun AllSongOptions(
     onReverseSongOrder: () -> Unit, onUpdateSongOrder: (SongOrder) -> Unit, getUIStyle: GetUIStyle,
-    asc: Boolean, onToggleAutoUpdate: () -> Unit, autoUpdateEnabled: Boolean
+    asc: Boolean,
 ) {
     val ci = ContentIcons(getUIStyle)
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val text = if (autoUpdateEnabled) "Auto-Update Enabled" else "Auto-Update Disabled"
     SortingOptionsForML(
         expanded = expanded, ci = ci, asc = asc,
         onReverseOrder = onReverseSongOrder,
@@ -262,9 +262,6 @@ private fun AllSongOptions(
         DropdownMenuItem(
             text = { Text("Created Date") },
             onClick = { onUpdateSongOrder(SongOrder.CreatedOn) }
-        )
-        DropdownMenuItem(
-            text = { Text(text) }, onClick = onToggleAutoUpdate
         )
     }
 }
@@ -299,7 +296,8 @@ fun AllPLsOptions(
 @Composable
 private fun EditSongOptions(
     hide: Boolean, onHideOrShow: () -> Unit, onAddSongs: () -> Unit, onShareSongs: () -> Unit,
-    onUpdateMetadata: (String) -> Unit, getUIStyle: GetUIStyle, enabled: Boolean
+    onUpdateMetadata: (String) -> Unit, onSelectAll: () -> Unit, onDeleteSongs: () -> Unit,
+    getUIStyle: GetUIStyle, enabled: Boolean
 ) {
     val ci = ContentIcons(getUIStyle)
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -324,9 +322,20 @@ private fun EditSongOptions(
 
             )
             DropdownMenuItem(
+                text = { Text("Select All") },
+                onClick = onSelectAll
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
                 text = { Text("Share") },
                 trailingIcon = { ci.ContentIcon(Icons.Default.Share) },
                 onClick = onShareSongs
+            )
+
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                trailingIcon = { ci.ContentIcon(Icons.Default.Delete) },
+                onClick = onDeleteSongs
             )
             HorizontalDivider()
             DropdownMenuItem(

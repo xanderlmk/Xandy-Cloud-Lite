@@ -31,7 +31,11 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xandy.lite.R
+import com.xandy.lite.controllers.view.models.EditAudioVM
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.db.tables.LyricLine
+import com.xandy.lite.db.tables.Lyrics
+import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.theme.GetUIStyle
 import my.nanihadesuka.compose.ColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
@@ -39,10 +43,14 @@ import my.nanihadesuka.compose.ScrollbarSettings
 
 @Composable
 fun HorizontalEditAudioView(
-    audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean,
-    onUpdate: (AudioFile) -> Unit, allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle
+    audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean, lyrics: Lyrics,
+    onLyricsChange: (Lyrics) -> Unit, onUpdate: (AudioFile, Lyrics?) -> Unit,
+    allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle, set: List<LyricLine>,
+    editAudioVM: EditAudioVM
 ) {
     val scrollState = rememberScrollState()
+    val ci = ContentIcons(getUIStyle)
+
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -114,6 +122,9 @@ fun HorizontalEditAudioView(
                     onDaySelected = { if (audio.month != null) onAudioChange(audio.copy(day = it)) },
                     onMonthSelected = { onAudioChange(audio.copy(month = it)) }
                 )
+                LyricsOptions(ci, lyrics, audio.durationMillis, set, editAudioVM) {
+                    onLyricsChange(it)
+                }
             }
         }
         Column(
@@ -145,7 +156,10 @@ fun HorizontalEditAudioView(
                 onAudioChange(audio.copy(picture = picture))
             }
             Spacer(Modifier.padding(vertical = 15.dp))
-            Button(onClick = { onUpdate(audio) }, modifier = Modifier.padding(8.dp)) {
+            Button(
+                onClick = { onUpdate(audio, lyrics.takeIf { ls -> ls.plain.isNotBlank() }) },
+                modifier = Modifier.padding(8.dp)
+            ) {
                 Text("Update Song")
             }
         }

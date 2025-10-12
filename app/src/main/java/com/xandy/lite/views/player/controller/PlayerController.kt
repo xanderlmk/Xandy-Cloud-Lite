@@ -42,6 +42,7 @@ import androidx.media3.session.MediaController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xandy.lite.R
+import com.xandy.lite.models.itemKey
 import com.xandy.lite.navigation.NavViewModel
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.theme.GetUIStyle
@@ -59,7 +60,6 @@ fun PlayerController(
     val sd by navVM.songDetails.collectAsStateWithLifecycle()
     val ci = ContentIcons(getUIStyle)
     val details = sd
-
     if (!tracks.isEmpty && sd != null) {
         Box(
             modifier
@@ -118,7 +118,7 @@ fun PlayerController(
                             .height(60.dp)
                             .clickable {
                                 navVM.updateTracks(controller.currentTracks)
-                                navVM.updatePickedSong(controller.currentMediaItem)
+                                navVM.updatePickedSong(controller.currentMediaItem?.itemKey())
                             }
                     )
                 }
@@ -198,5 +198,10 @@ fun PlayerController(
                 }
             }
         }
+    } else LaunchedEffect(Unit) {
+        delay(3_000L)
+        navVM.updateTracks(controller.currentTracks)
+        navVM.updatePickedSong(controller.currentMediaItem?.itemKey())
     }
 }
+

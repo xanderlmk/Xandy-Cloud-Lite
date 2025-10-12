@@ -7,9 +7,9 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.xandy.lite.db.IsBucketHidden
 import com.xandy.lite.db.tables.Bucket
 import com.xandy.lite.db.tables.BucketWithAudio
-import com.xandy.lite.models.ui.IsBucketHidden
 import kotlinx.coroutines.flow.Flow
 import kotlin.collections.forEach
 

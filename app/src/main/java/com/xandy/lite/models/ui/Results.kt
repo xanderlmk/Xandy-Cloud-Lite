@@ -15,7 +15,7 @@ sealed class UpdateResult {
     data object Success : UpdateResult()
     data object Failure : UpdateResult()
     data class SecurityException(val ex: RecoverableSecurityException) : UpdateResult()
-    data class FileException(val request: PendingIntent): UpdateResult()
+    data class FileException(val request: PendingIntent) : UpdateResult()
 }
 
 sealed class DeleteResult {
@@ -24,6 +24,6 @@ sealed class DeleteResult {
         val deleted: List<Uri>, val failed: List<Uri>
     ) : DeleteResult()
 
-    data class SecurityException(val ex: RecoverableSecurityException) : DeleteResult()
+    data class FileException(val request: PendingIntent) : DeleteResult()
     data object Failure : DeleteResult()
 }

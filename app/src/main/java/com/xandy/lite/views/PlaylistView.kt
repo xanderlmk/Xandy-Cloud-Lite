@@ -1,5 +1,6 @@
 package com.xandy.lite.views
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,7 +13,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +27,7 @@ import com.xandy.lite.ui.functions.item.details.PlaylistOrderRow
 import com.xandy.lite.controllers.view.models.LocalPLVM
 import com.xandy.lite.models.ui.PlaylistWithCount
 import com.xandy.lite.ui.functions.ContentIcons
+import com.xandy.lite.ui.functions.LyricsListDialog
 import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.SongRow
@@ -34,10 +39,9 @@ import my.nanihadesuka.compose.ScrollbarSettings
 
 @Composable
 fun LocalPlaylistView(
-    playlistVM: LocalPLVM, getUIStyle: GetUIStyle, songsInPL: PlaylistWithCount,
+    playlistVM: LocalPLVM, currentId: String, getUIStyle: GetUIStyle, songsInPL: PlaylistWithCount,
     onAdd: (String) -> Unit, onEditSong: (String) -> Unit
 ) {
-    val audioWithPls = playlistVM.allSongs.collectAsStateWithLifecycle().value.list
     val sd by playlistVM.songDetails.collectAsStateWithLifecycle()
     val isSelecting by playlistVM.isSelecting.collectAsStateWithLifecycle()
     val selectedSongIds by playlistVM.selectedSongIds.collectAsStateWithLifecycle()
@@ -70,6 +74,11 @@ fun LocalPlaylistView(
         .size(200.dp)
         .padding(2.dp)
     val state = rememberLazyListState()
+    var showDialog by rememberSaveable { mutableStateOf(Pair(false, "")) }
+    val lyricsList by playlistVM.lyricsList.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var enabled by rememberSaveable { mutableStateOf(true) }
+
     LazyColumnScrollbar(
         state = state,
         settings = ScrollbarSettings(
@@ -133,6 +142,7 @@ fun LocalPlaylistView(
                 }
 
                 items(filtered, key = { it.data.uri.toString() }) { song ->
+                    val id = song.data.id
                     val selected = song.data.uri.toString() in selectedSongSet
                     SongRow(
                         song.data, getUIStyle, isSelecting = isSelecting, isSelected = selected,
@@ -140,31 +150,28 @@ fun LocalPlaylistView(
                             if (!isSelecting) playlistVM.selectSong(
                                 song.data, songsInPL.songs.map { it.data }, name
                             )
-                            else playlistVM.toggleSong(song.data.uri.toString())
+                            else playlistVM.toggleSong(song.data.id)
                         }, enabled = !alIsLoading,
                         onLongPress = {
-                            if (isSelecting) playlistVM.toggleSong(song.data.uri.toString())
+                            if (isSelecting) playlistVM.toggleSong(song.data.id)
                             else playlistVM.startSelecting(song.data.uri.toString())
                         },
                         onDelete = {
                             coroutineScope.launch {
                                 playlistVM.removeLocalSongsFromPL(
-                                    songIds = listOf(song.data.uri.toString()),
+                                    songIds = listOf(song.data.id),
                                     playlistId = songsInPL.playlist.name
                                 )
                             }
-                        }, context = LocalContext.current,
+                        }, context = LocalContext.current, isPickedSong = currentId == id ,
                         onEdit = { onEditSong(song.data.uri.toString()) },
-                        onAdd = { onAdd(song.data.uri.toString()) }
+                        onAdd = { onAdd(song.data.uri.toString()) },
+                        onUpsertLyrics = { showDialog = Pair(true, song.data.uri.toString()) }
                     )
                 }
             }
         } else {
-            val filtered = audioWithPls.filter { audio ->
-                if (query.isBlank() || !isSearching) return@filter true
-                audio.song.title.contains(query, ignoreCase = true) ||
-                        audio.song.artist.contains(query, ignoreCase = true)
-            }
+            val filtered by playlistVM.filteredAudioFiles.collectAsStateWithLifecycle()
             val selectedSongSet = selectedSongIds.toSet()
             SongLazyColumn(
                 list = filtered, getUIStyle = getUIStyle, hideAllowed = Pair(true, "Hide"),
@@ -174,14 +181,38 @@ fun LocalPlaylistView(
                     if (!isSelecting) playlistVM.selectSong(
                         audio, songsInPL.songs.map { it.data }, name
                     )
-                    else playlistVM.toggleSong(audio.uri.toString())
+                    else playlistVM.toggleSong(audio.id)
                 },
-                onDelete = {}, onEdit = {}, onAdd = onAdd,
+                onDelete = {}, onEdit = {}, onAdd = onAdd,currentId = currentId,
                 onLongPress = {
                     if (isSelecting) playlistVM.toggleSong(it)
                     else playlistVM.startSelecting(it)
-                }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                onUpsertLyrics = { showDialog = Pair(true, it) }
             )
         }
     }
+    LyricsListDialog(
+        showDialog = showDialog.first, onDismiss = { showDialog = Pair(false, "") },
+        getUIStyle = getUIStyle, list = lyricsList, enabled = enabled,
+        onSubmit = { lyricsId ->
+            coroutineScope.launch {
+                val songUri = showDialog.second
+                if (songUri.isBlank()) {
+                    Toast.makeText(context, "Null song", Toast.LENGTH_SHORT).show()
+                    showDialog = Pair(false, "")
+                    return@launch
+                }
+                enabled = false
+                val result =
+                    playlistVM.updateSongLyrics(lyricsId = lyricsId, songUri = songUri)
+                if (!result)
+                    Toast.makeText(
+                        context, "Failed to add lyrics to $songUri", Toast.LENGTH_SHORT
+                    ).show()
+                enabled = true
+                showDialog = Pair(false, "")
+            }
+        }
+    )
 }

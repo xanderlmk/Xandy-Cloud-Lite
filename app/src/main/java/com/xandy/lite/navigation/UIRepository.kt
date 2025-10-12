@@ -32,6 +32,7 @@ interface UIRepository {
     fun endSelect()
 
     fun toggleSong(songId: String)
+    fun selectAll(list: List<String>)
 
     fun turnOnSearch()
     fun turnOffSearch()
@@ -86,6 +87,8 @@ class UIRepositoryImpl(private val context: Context) : UIRepository {
         else mutableIds.remove(songId)
         mutableIds
     }
+
+    override fun selectAll(list: List<String>) = _selectedSongIds.update { list }
 
     override fun turnOnSearch() = _isSearching.update { true }
     override fun turnOffSearch() = _isSearching.update { false }

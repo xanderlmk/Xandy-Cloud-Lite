@@ -2,13 +2,17 @@ package com.xandy.lite.ui.theme
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
+import com.xandy.lite.models.Theme
+import com.xandy.lite.models.application.PrefRepository
 
 @Suppress("unused")
 class GetUIStyle(
-    private var cS: ColorScheme,
-    private var isDarkTheme: Boolean, private var isDynamicTheme: Boolean
+    private val cS: ColorScheme, private val isDarkTheme: Boolean,
+    private val isDynamicTheme: Boolean, private val prefRepository: PrefRepository
 ) {
-
+    suspend fun changeTheme(theme: Theme) = prefRepository.changeTheme(theme)
+    fun getAppTheme() = prefRepository.theme
+    fun getIsDarkTheme() = isDarkTheme
     fun floatingPlayerBackground(): Color =
         if (isDarkTheme) Color(33, 40, 40, 255)
         else Color(127, 141, 141, 255)
@@ -56,4 +60,6 @@ class GetUIStyle(
     fun dialogBackGroundColor(): Color =
         if (isDarkTheme) Color(13, 16, 13, 255)
         else Color(179, 252, 201, 255)
+    fun getColorScheme(): ColorScheme = cS
+
 }

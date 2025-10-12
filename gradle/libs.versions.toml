@@ -12,17 +12,13 @@ accompanistPermissions = "0.37.3"
 datastorePreferences = "1.1.7"
 ksp = "2.0.21-1.0.27"
 loggingInterceptor = "4.12.0"
-media3 = "1.7.1"
+media3 = "1.7.5"
 navigationCompose = "2.9.1"
 roomVersion = "2.7.2"
-media3Session = "1.7.1"
 coilCompose = "2.3.0"
 lazycolumnscrollbar = "2.2.0"
-kotlinxSerializationJson = "1.5.0"
+kotlinxSerializationJson = "1.6.0"
 media3SessionVersion = "1.8.0"
-
-
-
 
 [libraries]
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissions" }
@@ -63,7 +59,6 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 lazycolumnscrollbar = { module = "com.github.nanihadesuka:LazyColumnScrollbar", version.ref = "lazycolumnscrollbar" }
 logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "loggingInterceptor" }
-androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3Session" }
 media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3SessionVersion" }
 
 [plugins]

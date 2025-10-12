@@ -41,17 +41,17 @@ fun groupAudioFilesIntoAlbums(
     return known + unknown
 }
 
-fun groupAudioFilesByArtist(audioFiles: List<AudioFile>): List<Artist> =
+fun groupAudioFilesByArtist(audioFiles: List<AudioFile>, unknownTrackUri: Uri): List<Artist> =
     if (audioFiles.isEmpty()) emptyList()
     else audioFiles.groupBy { it.artist.trim().lowercase() }
         .map { (_, songs) ->
             val artist = songs.first().artist.trim()
-            val picture = songs.first().picture
+            val picture = songs.firstOrNull()?.picture ?: unknownTrackUri
             Artist(artist, picture, songs, songs.size)
         }
 
 
-fun groupAudioFilesByGenre(audioFiles: List<AudioFile>): List<Genre> {
+fun groupAudioFilesByGenre(audioFiles: List<AudioFile>, unknownTrackUri: Uri): List<Genre> {
     if (audioFiles.isEmpty()) return emptyList()
     val known = audioFiles
         .filter { !it.genre.isNullOrBlank() }
@@ -63,9 +63,9 @@ fun groupAudioFilesByGenre(audioFiles: List<AudioFile>): List<Genre> {
         }
     val unknownAudios = audioFiles
         .filter { it.genre.isNullOrBlank() }
-    val picture = unknownAudios.first().picture
-    val unknown = Genre(
+    val picture = unknownAudios.firstOrNull()?.picture ?: unknownTrackUri
+    val unknown = if(unknownAudios.isEmpty()) null  else Genre(
         name = "Unknown", picture = picture, songs = unknownAudios, songCount = unknownAudios.size
     )
-    return known + unknown
+    return  unknown?.let { known + it } ?: known
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -44,6 +45,7 @@ class LocalLibraryStates(
         private val LOCAL_BUCKET_VOL = stringPreferencesKey("local_bucket_vol")
         private val LOCAL_BUCKET_ID = longPreferencesKey("local_bucket_id")
         private val LOCAL_GENRE = stringPreferencesKey("local_genre_name")
+        private val ID_WRITE_ENABLE = booleanPreferencesKey("enabled_id_writing")
         private const val PREFERENCES = "preferences"
         private const val AUTO_UPDATE = "auto_update_enabled"
     }
@@ -71,7 +73,7 @@ class LocalLibraryStates(
         combinePickedNameWithLocalAlbum(_localAlbumName, localAlbums)
 
     val localArtists = audioFiles.map { state ->
-        groupAudioFilesByArtist(state.list.map { it.song })
+        groupAudioFilesByArtist(state.list.map { it.song }, unknownTrackUri)
     }.flowOn(Dispatchers.IO.limitedParallelism(2, "Artists"))
 
     private val _localArtistName = context.dataStore.data.map { preferences ->
@@ -81,7 +83,7 @@ class LocalLibraryStates(
         combinePickedNameWithLocalArtist(_localArtistName, localArtists)
 
     val localGenres = audioFiles.map { state ->
-        groupAudioFilesByGenre(state.list.map { it.song })
+        groupAudioFilesByGenre(state.list.map { it.song }, unknownTrackUri)
     }.flowOn(Dispatchers.IO.limitedParallelism(2, "Genres"))
     private val _localGenreName = context.dataStore.data.map { preferences ->
         preferences[LOCAL_GENRE] ?: ""
@@ -148,4 +150,18 @@ class LocalLibraryStates(
     private val _autoUpdate = MutableStateFlow(autoUpdateEnabled())
     val autoUpdate = _autoUpdate.asStateFlow()
 
+    val songIdWritingEnabled = context.dataStore.data.map { preferences ->
+        preferences[ID_WRITE_ENABLE] ?: false
+    }
+
+    suspend fun updateIdWritingEnabled(enabled: Boolean) = withContext(Dispatchers.IO) {
+        try {
+            context.dataStore.edit { settings ->
+                settings[ID_WRITE_ENABLE] = enabled
+            }
+        } catch (e: Exception) {
+            Log.w(XANDY_CLOUD, "Failed updating id writing enabled: $e")
+            return@withContext
+        }
+    }
 }

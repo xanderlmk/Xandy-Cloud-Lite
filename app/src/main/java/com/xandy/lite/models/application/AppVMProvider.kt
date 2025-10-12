@@ -6,12 +6,14 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.xandy.lite.controllers.view.models.AddToLocalPlVM
+import com.xandy.lite.controllers.view.models.EditAudioVM
 import com.xandy.lite.controllers.view.models.LocalAlbumVM
 import com.xandy.lite.controllers.view.models.LocalArtistVM
 import com.xandy.lite.controllers.view.models.LocalFolderVM
 import com.xandy.lite.controllers.view.models.LocalGenreVM
 import com.xandy.lite.controllers.view.models.LocalMediaVM
 import com.xandy.lite.controllers.view.models.LocalPLVM
+import com.xandy.lite.controllers.view.models.LyricsVM
 import com.xandy.lite.controllers.view.models.PickedSongVM
 import com.xandy.lite.navigation.NavViewModel
 
@@ -64,6 +66,10 @@ object AppVMProvider {
                 xandyCloudApplication().container.uiRepository
             )
         }
+        initializer {
+            EditAudioVM(xandyCloudApplication().container.songRepository)
+        }
+        initializer { LyricsVM(xandyCloudApplication().container.songRepository) }
     }
 }
 

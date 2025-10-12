@@ -4,10 +4,12 @@ import android.app.RecoverableSecurityException
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.core.content.FileProvider
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
 import com.kyant.taglib.TagProperty
+import com.xandy.lite.models.application.XANDY_CLOUD
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -23,16 +25,23 @@ suspend fun updateTags(
             val metadata = TagLib.getMetadata(fd.dup().detachFd(), readPictures = true)
                 ?: return@withContext false
             val propMap = metadata.propertyMap
-            val new = propMap.apply { this[key] = arrayOf(newValue) }
-            return@use TagLib.savePropertyMap(fd.dup().detachFd(), new)
+            val newMap = HashMap(propMap)
+            newMap[key] = arrayOf(newValue)
+            val saved = try {
+                TagLib.savePropertyMap(fd.dup().detachFd(), newMap)
+            } catch (e: Exception) {
+                Log.w(XANDY_CLOUD, "Couldn't save property map${e.printStackTrace()}")
+               false
+            }
+            return@use saved
         } ?: return@withContext false
     } catch (e: Exception) {
+        Log.w(XANDY_CLOUD, "${e.printStackTrace()}")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException)
             throw e
         else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && e is FileNotFoundException) {
             throw e
         }
-        e.printStackTrace()
         return@withContext false
     }
 }
@@ -56,6 +65,19 @@ suspend fun updateAlbum(
 suspend fun updateReleaseDate(
     context: Context, audioUri: Uri, newDate: String
 ): Boolean = updateTags(context, audioUri, TagProperty.ALBUM, newDate)
+
+
+suspend fun updatePlainLyrics(context: Context, audioUri: Uri, newLyrics: String): Boolean
+= updateTags(context, audioUri, "PLAINLYRICS", newLyrics)
+
+suspend fun updateTranslationLyrics(context: Context, audioUri: Uri, newLyrics: String): Boolean
+= updateTags(context, audioUri, "TRANSLATEDLYRICS", newLyrics)
+
+suspend fun updateScrollLyrics(context: Context, audioUri: Uri, newLyrics: String
+): Boolean = updateTags(context, audioUri, "SYNCHRONIZEDLYRICS", newLyrics)
+
+suspend fun updateSongId(context: Context, audioUri: Uri, id: String): Boolean
+= updateTags(context, audioUri, XANDY_SONG_ID, id)
 
 suspend fun updateArtwork(
     context: Context, audioUri: Uri, imageUri: Uri
@@ -90,3 +112,5 @@ suspend fun updateArtwork(
         return@withContext Pair(false, imageUri)
     }
 }
+
+const val XANDY_SONG_ID = "XANDYID"

@@ -6,10 +6,10 @@ import android.net.Uri
 import android.os.Parcelable
 import androidx.annotation.DrawableRes
 import androidx.media3.common.MediaItem
-import androidx.room.ColumnInfo
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.BucketWithAudio
 import com.xandy.lite.db.tables.AudioWithPls
+import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.db.tables.Playlist
 import com.xandy.lite.db.tables.SongWithDateAdded
 import com.xandy.lite.models.ui.order.by.OrderQueueBy
@@ -18,9 +18,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.parcelize.Parcelize
 import java.util.Date
-
-private const val SONG_ID = "song_id"
-private const val PLAYLIST_ID = "playlist_id"
 
 
 @Parcelize
@@ -31,7 +28,7 @@ data class AudioUIState(
 
 data class SongDetails(
     val id: String, val title: String, val artist: String,
-    val album: String?, val picture: Any?
+    val album: String?, val picture: Any?, val lyrics: Lyrics?
 )
 
 data class PickedSongVMStates(
@@ -117,9 +114,6 @@ fun Flow<LocalPlUIState>.toPlaylists() = this.map { it.list.map { pl -> pl.playl
 
 data class MediaItemWithCreatedOn(val mediaItem: MediaItem, val createdOn: Date)
 
-fun MediaItem.itemKey(): String =
-    this.localConfiguration?.uri?.toString() ?: this.mediaId
-
 @Parcelize
 sealed class ShowModalFor : Parcelable {
     @Parcelize
@@ -127,9 +121,18 @@ sealed class ShowModalFor : Parcelable {
 
     @Parcelize
     data object LocalPl : ShowModalFor()
+}
+
+@Parcelize
+sealed class SongToggle : Parcelable {
+    @Parcelize
+    data object Details : SongToggle()
 
     @Parcelize
-    data object RemotePl : ShowModalFor()
+    data object Queue : SongToggle()
+
+    @Parcelize
+    data object Lyrics : SongToggle()
 }
 
 fun Context.drawableResUri(@DrawableRes resId: Int): Uri =
@@ -140,8 +143,3 @@ fun Context.drawableResUri(@DrawableRes resId: Int): Uri =
         .appendPath(resources.getResourceEntryName(resId))
         .build()
 
-
-data class IsBucketHidden(val hidden: Boolean)
-data class IsAudioHidden(val hidden: Boolean, val permanentlyHidden: Boolean)
-data class AudioUri(@ColumnInfo(name = SONG_ID) val uri: Uri)
-data class PlaylistName(@ColumnInfo(name = PLAYLIST_ID) val name: String)

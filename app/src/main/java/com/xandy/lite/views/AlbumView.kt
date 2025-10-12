@@ -9,6 +9,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -16,18 +20,22 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xandy.lite.controllers.view.models.LocalAlbumVM
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.models.XCToast
 import com.xandy.lite.models.ui.Album
 import com.xandy.lite.ui.functions.ContentIcons
+import com.xandy.lite.ui.functions.LyricsListDialog
 import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.PlayOptions
 import com.xandy.lite.ui.theme.GetUIStyle
+import kotlinx.coroutines.launch
 
 
 @Composable
 fun LocalAlbumView(
-    album: Album, modifier: Modifier, enabled: Boolean, getUIStyle: GetUIStyle,
+    album: Album,currentId: String, modifier: Modifier, enabled: Boolean, getUIStyle: GetUIStyle,
     onDelete: (AudioFile) -> Unit, onAdd: (String) -> Unit, onEdit: (String) -> Unit,
+    onEnabled: (Boolean) -> Unit,
     vm: LocalAlbumVM
 ) {
     val selectedSongSet = vm.selectedSongIds.collectAsStateWithLifecycle().value.toSet()
@@ -38,6 +46,10 @@ fun LocalAlbumView(
     val tracks by vm.tracks.collectAsStateWithLifecycle()
     val query by vm.query.collectAsStateWithLifecycle()
     val isSearching by vm.isSearching.collectAsStateWithLifecycle()
+    var showDialog by rememberSaveable { mutableStateOf(Pair(false, "")) }
+    val lyricsList by vm.lyricsList.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
+    val toast = XCToast(LocalContext.current)
 
     val name = "local_album_${album.name}"
     val ci = ContentIcons(getUIStyle)
@@ -63,7 +75,7 @@ fun LocalAlbumView(
             if (!isSelecting) {
                 vm.selectSong(audio, album.songs, name)
             } else vm.toggleSong(audio.uri.toString())
-        }, onEdit = onEdit, onAdd = onAdd,
+        }, onEdit = onEdit, onAdd = onAdd, currentId = currentId,
         onLongPress = {
             if (isSelecting) vm.toggleSong(it)
             else vm.startSelecting(it)
@@ -71,6 +83,7 @@ fun LocalAlbumView(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = 4.dp), selectedSongSet = selectedSongSet,
+        onUpsertLyrics = { showDialog = Pair(true, it) },
         topContent = {
             item {
                 Artwork(album.picture, LocalContext.current, pictureModifier)
@@ -111,6 +124,27 @@ fun LocalAlbumView(
                         }
                     }
                 )
+            }
+        }
+    )
+    LyricsListDialog(
+        showDialog = showDialog.first, onDismiss = { showDialog = Pair(false, "") },
+        getUIStyle = getUIStyle, list = lyricsList, enabled = enabled,
+        onSubmit = { lyricsId ->
+            coroutineScope.launch {
+                val songId = showDialog.second
+                if (songId.isBlank()) {
+                    toast.makeMessage("Null song")
+                    showDialog = Pair(false, "")
+                    return@launch
+                }
+                onEnabled(false)
+                val result =
+                    vm.updateSongLyrics(lyricsId = lyricsId, songUri = songId)
+                if (!result)
+                    toast.makeMessage("Failed to add lyrics to $songId")
+                onEnabled(true)
+                showDialog = Pair(false, "")
             }
         }
     )

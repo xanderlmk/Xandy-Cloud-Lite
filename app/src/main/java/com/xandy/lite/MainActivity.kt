@@ -10,7 +10,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
@@ -19,13 +21,19 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.compose.rememberNavController
 import com.google.common.util.concurrent.ListenableFuture
 import com.xandy.lite.models.PlaybackService
+import com.xandy.lite.models.Theme
 import com.xandy.lite.models.application.AppVMProvider
+import com.xandy.lite.models.application.PrefRepository
+import com.xandy.lite.models.application.PrefRepositoryImpl
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.mediaControllerBuilder
+import com.xandy.lite.models.itemKey
 import com.xandy.lite.navigation.MainNavHost
 import com.xandy.lite.navigation.NavViewModel
 import com.xandy.lite.ui.theme.GetUIStyle
 import com.xandy.lite.ui.theme.XandyCloudTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlin.getValue
@@ -35,18 +43,25 @@ class MainActivity : ComponentActivity() {
     private val navVM: NavViewModel by viewModels { AppVMProvider.Factory }
     private lateinit var playerView: PlayerView
     private var controllerFuture: ListenableFuture<MediaController>? = null
+    private val applicationScope = CoroutineScope(SupervisorJob())
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val preferences: PrefRepository = PrefRepositoryImpl(application, applicationScope)
         super.onCreate(savedInstanceState)
         playerView = PlayerView(this)
         enableEdgeToEdge()
         setContent {
+            val theme by preferences.theme.collectAsStateWithLifecycle()
             val mainNavController = rememberNavController()
             val cs = MaterialTheme.colorScheme
+            val isSystemDark =
+                if (theme is Theme.Default) isSystemInDarkTheme() else theme is Theme.Dark
+
             val getUIStyle = GetUIStyle(
-                cs, isSystemInDarkTheme(), Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                cs, isSystemDark, Build.VERSION.SDK_INT >= Build.VERSION_CODES.S, preferences
+
             )
-            XandyCloudTheme {
+            XandyCloudTheme(isSystemDark) {
                 MainNavHost(
                     mainNavController, getUIStyle, navVM = navVM,
                     getController = { getController() }
@@ -63,7 +78,7 @@ class MainActivity : ComponentActivity() {
             controllerFuture = mediaControllerBuilder(
                 sessionToken = sessionToken, activity = this,
                 onDisconnect = { lifecycleLaunch(navVM.resetMediaController()) },
-                updatePickedSong = { lifecycleLaunch(navVM.updatePickedSong(it)) },
+                updatePickedSong = { lifecycleLaunch(navVM.updatePickedSong(it?.itemKey())) },
                 updateDuration = { lifecycleLaunch(navVM.updateDuration(it)) },
                 updatePosition = { lifecycleLaunch(navVM.updatePosition(it)) },
                 updateTracks = { lifecycleLaunch(navVM.updateTracks(it)) },

@@ -28,6 +28,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -36,12 +37,19 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.xandy.lite.controllers.view.models.PickedSongVM
 import com.xandy.lite.ui.theme.GetUIStyle
 import com.xandy.lite.models.PlaybackService
+import com.xandy.lite.models.Theme
 import com.xandy.lite.models.application.AppVMProvider
+import com.xandy.lite.models.application.PrefRepository
+import com.xandy.lite.models.application.PrefRepositoryImpl
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.mediaControllerBuilder
+import com.xandy.lite.models.itemKey
+import com.xandy.lite.models.ui.SongToggle
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.theme.XandyCloudTheme
 import com.xandy.lite.views.picked.song.SongView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -50,28 +58,33 @@ class SongViewActivity : ComponentActivity() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val songVM: PickedSongVM by viewModels { AppVMProvider.Factory }
     private lateinit var playerView: PlayerView
+    private val applicationScope = CoroutineScope(SupervisorJob())
 
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        val preferences: PrefRepository = PrefRepositoryImpl(application, applicationScope)
         super.onCreate(savedInstanceState)
         playerView = PlayerView(this)
         enableEdgeToEdge()
         setContent {
+            val theme by preferences.theme.collectAsStateWithLifecycle()
             val cs = MaterialTheme.colorScheme
+            val isSystemDark =
+                if (theme is Theme.Default) isSystemInDarkTheme() else theme is Theme.Dark
             val getUIStyle = GetUIStyle(
-                cs, isSystemInDarkTheme(), Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                cs, isSystemDark, Build.VERSION.SDK_INT >= Build.VERSION_CODES.S, preferences
             )
             val ci = ContentIcons(getUIStyle)
-            var showQueue by rememberSaveable { mutableStateOf(false) }
+            var songToggle by rememberSaveable { mutableStateOf<SongToggle>(SongToggle.Details) }
             BackHandler {
-                if (showQueue) {
-                    showQueue = false
+                if (songToggle !is SongToggle.Details) {
+                    songToggle = SongToggle.Details
                 } else {
                     navigateUpToMain()
                 }
             }
-            XandyCloudTheme {
+            XandyCloudTheme(isSystemDark) {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     topBar = {
@@ -95,7 +108,7 @@ class SongViewActivity : ComponentActivity() {
                     Box(Modifier.padding(innerPadding)) {
                         SongView(
                             songVM, getUIStyle,
-                            onToggle = { showQueue = !showQueue }, showQueue
+                            onToggle = { songToggle = it }, songToggle
                         )
                     }
                 }
@@ -122,7 +135,7 @@ class SongViewActivity : ComponentActivity() {
             controllerFuture = mediaControllerBuilder(
                 sessionToken = sessionToken, activity = this,
                 onDisconnect = { },
-                updatePickedSong = { lifecycleLaunch(songVM.updatePickedSong(it)) },
+                updatePickedSong = { lifecycleLaunch(songVM.updatePickedSong(it?.itemKey())) },
                 updateDuration = { lifecycleLaunch(songVM.updateDuration(it)) },
                 updatePosition = { lifecycleLaunch(songVM.updatePosition(it)) },
                 updateTracks = { lifecycleLaunch(songVM.updateTracks(it)) },

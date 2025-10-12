@@ -5,7 +5,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
@@ -21,17 +24,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,11 +50,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.xandy.lite.controllers.view.models.EditAudioVM
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.db.tables.AudioWithPls
+import com.xandy.lite.db.tables.LyricLine
+import com.xandy.lite.db.tables.Lyrics
+import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.SelectImageModal
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.theme.GetUIStyle
@@ -54,26 +72,29 @@ import java.time.Year
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.roundToLong
 
 
 @Composable
 fun EditAudioView(
-    audioFile: AudioFile, enabled: Boolean, getUIStyle: GetUIStyle,
-    allMediaArtwork: List<Uri>, onUpdate: (AudioFile) -> Unit
+    audioFile: AudioWithPls, enabled: Boolean, getUIStyle: GetUIStyle, editAudioVM: EditAudioVM,
+    allMediaArtwork: List<Uri>, onUpdate: (AudioFile, Lyrics?) -> Unit
 ) {
-    var audio by rememberSaveable { mutableStateOf(audioFile) }
+    var audio by rememberSaveable { mutableStateOf(audioFile.song) }
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
+    var lyrics by rememberSaveable { mutableStateOf(audioFile.lyrics ?: Lyrics(plain = "")) }
+    val set by editAudioVM.set.collectAsStateWithLifecycle()
     if (isLandscape)
         HorizontalEditAudioView(
             audio = audio, enabled = enabled, allMediaArtwork = allMediaArtwork,
-            onAudioChange = { audio = it },
-            onUpdate = onUpdate, getUIStyle = getUIStyle
+            onAudioChange = { audio = it }, lyrics = lyrics, onLyricsChange = { lyrics = it },
+            onUpdate = onUpdate, getUIStyle = getUIStyle, set = set, editAudioVM = editAudioVM
         )
     else VerticalEditAudioView(
         audio = audio, enabled = enabled, allMediaArtwork = allMediaArtwork,
         onAudioChange = { audio = it },
-        onUpdate = onUpdate, getUIStyle = getUIStyle
+        lyrics = lyrics, onLyricsChange = { lyrics = it },
+        onUpdate = onUpdate, getUIStyle = getUIStyle, set = set, editAudioVM = editAudioVM
     )
 }
 
@@ -244,6 +265,9 @@ fun DateChooser(
                     }
                 )
             },
+            tint = if (selectedYear == null) getUIStyle.disabledThemedColor()
+            else getUIStyle.themedColor(),
+            enabled = selectedYear != null,
             modifier = Modifier.weight(1f)
         )
 
@@ -251,11 +275,11 @@ fun DateChooser(
             if (daysInMonth != null) listOf("—") + (1..daysInMonth).map { it.toString() }
             else listOf()
 
-
         SimpleDropdown(
             label = "Day",
             tint = if (dayOptions.isEmpty()) getUIStyle.disabledThemedColor()
             else getUIStyle.themedColor(),
+            enabled = dayOptions.isNotEmpty(),
             options = dayOptions,
             selectedIndex = selectedDay ?: 0,
             onSelectIndex = { idx -> onDaySelected(if (idx == 0) null else idx) },
@@ -267,7 +291,7 @@ fun DateChooser(
 @Composable
 private fun SimpleDropdown(
     label: String, options: List<String>, selectedIndex: Int, onSelectIndex: (Int) -> Unit,
-    tint: Color = LocalContentColor.current, modifier: Modifier = Modifier
+    enabled: Boolean = true, tint: Color = LocalContentColor.current, modifier: Modifier = Modifier
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val displayText = if (selectedIndex in options.indices) options[selectedIndex] else "—"
@@ -288,7 +312,7 @@ private fun SimpleDropdown(
                     contentDescription = null,
                     tint = tint,
                     modifier = Modifier
-                        .clickable(enabled = options.isNotEmpty()) { expanded = !expanded }
+                        .clickable(enabled = enabled) { expanded = !expanded }
                 )
             },
         )
@@ -307,4 +331,155 @@ private fun SimpleDropdown(
             }
         }
     }
+}
+
+@Composable
+fun LyricsOptions(
+    ci: ContentIcons, lyrics: Lyrics, durationMs: Long, set: List<LyricLine>,
+    editAudioVM: EditAudioVM, onLyricsChange: (Lyrics) -> Unit
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val icon = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown
+    Text(text = "Lyrics", textDecoration = TextDecoration.Underline)
+    TextField(
+        value = lyrics.plain,
+        placeholder = { Text("Type or paste lyrics here") },
+        onValueChange = { onLyricsChange(lyrics.copy(plain = it)) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+    )
+    if (lyrics.plain.isNotBlank()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("More options")
+            IconButton(onClick = { expanded = !expanded }) { ci.ContentIcon(icon) }
+        }
+        if (expanded) {
+            Text(text = "Translation for Lyrics", textDecoration = TextDecoration.Underline)
+            TextField(
+                value = lyrics.translation ?: "",
+                placeholder = { Text("Type or paste translation here") },
+                onValueChange = { onLyricsChange(lyrics.copy(translation = it)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            )
+            Text(text = "Synchronized Lyrics", textDecoration = TextDecoration.Underline)
+            if (set.isEmpty()) Button(onClick = {
+                editAudioVM.addToSet(0, durationMs)
+            }) { Text("Add lyrics line") }
+            else set.forEachIndexed { index, lyricLine ->
+                val previousRange = rememberUpdatedState(set).value.takeIf {
+                    (index - 1) in it.indices
+                }?.get(index - 1)?.range
+                val nextRange = rememberUpdatedState(set).value.takeIf {
+                    (index + 1) in it.indices
+                }?.get(index + 1)?.range
+                var sliderRange by remember {
+                    mutableStateOf(
+                        lyricLine.range.first / durationMs.toFloat()..lyricLine.range.last / durationMs.toFloat()
+                    )
+                }
+                key(lyricLine.range.first, lyricLine.range.last) {
+                    sliderRange =
+                        lyricLine.range.first / durationMs.toFloat()..lyricLine.range.last / durationMs.toFloat()
+                }
+
+                TextField(
+                    value = lyricLine.text,
+                    onValueChange = { editAudioVM.updateLineTextAt(index, it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                )
+                TrimRangeChooser(
+                    sliderRange = sliderRange, durationMs,
+                    lyricLine.range.first, lyricLine.range.last,
+                    previousRange = previousRange, nextRange = nextRange
+                ) {
+                    sliderRange = it.first / durationMs.toFloat()..it.last / durationMs.toFloat()
+                    editAudioVM.updateLineRangeAt(index, it.first, it.last)
+                }
+
+                if (index == set.lastIndex) {
+                    if (lyricLine.range.last < durationMs)
+                        Button(onClick = {
+                            editAudioVM.addToSet(lyricLine.range.last, durationMs)
+                        }) { Text("Add lyrics line") }
+                    Button(onClick = { editAudioVM.removeLast() }) { Text("Remove lyrics line") }
+                }
+            }
+        }
+    }
+
+}
+
+
+/**
+ * Range chooser for a media timeline.
+ *
+ * @param durationMs total duration in milliseconds (must be > 0)
+ * @param startMs starting ms
+ * @param endMs ending ms
+ * @param minGapMs minimum allowed gap between start and end in ms (defaults 100 ms)
+ * @param onRangeChanged called when user finished dragging with the chosen LongRange (inclusive start..end)
+ */
+@Composable
+private fun TrimRangeChooser(
+    sliderRange: ClosedFloatingPointRange<Float>, durationMs: Long,
+    startMs: Long, endMs: Long, minGapMs: Long = 100L,
+    previousRange: LongRange?, nextRange: LongRange?, onRangeChanged: (LongRange) -> Unit
+) {
+    val duration = durationMs.coerceAtLeast(1L)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp)
+    ) {
+        TimeEditRow(startMs, endMs)
+        RangeSlider(
+            value = sliderRange,
+            onValueChange = { newRange ->
+                val minGapFrac = minGapMs / duration.toFloat()
+                val startF = newRange.start.coerceIn(0f, 1f)
+                val endF = newRange.endInclusive.coerceIn(0f, 1f)
+                val previousLast = previousRange?.last
+                val nextFirst = nextRange?.first
+                var tempStart =
+                    (startF * duration).roundToLong().coerceIn(0L, duration)
+                var tempEnd = (endF * duration).roundToLong().coerceIn(0L, duration)
+                if (endF - startF < minGapFrac) return@RangeSlider
+                if (previousLast != null && tempStart < previousLast) tempStart = previousLast
+                if (nextFirst != null && nextFirst < tempEnd) tempEnd = nextFirst
+                onRangeChanged(tempStart..tempEnd)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+                .height(48.dp)
+        )
+    }
+}
+
+@Composable
+private fun TimeEditRow(startMs: Long, endMs: Long) {
+    Row(
+        modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = formatMs(startMs), style = MaterialTheme.typography.bodyLarge)
+        Text(text = formatMs(endMs), style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** Returns "M:SS.mmm" */
+private fun formatMs(ms: Long): String {
+    val total = ms.coerceAtLeast(0L)
+    val minutes = total / 60_000
+    val seconds = (total % 60_000) / 1000
+    val millis = total % 1000
+    return "%d:%02d.%03d".format(minutes, seconds, millis)
 }

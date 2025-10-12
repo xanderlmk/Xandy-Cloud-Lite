@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -26,6 +28,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.xandy.lite.db.tables.LyricsWithAudio
+import com.xandy.lite.ui.functions.item.details.LyricsRow
 import com.xandy.lite.ui.theme.GetUIStyle
 
 
@@ -155,6 +159,37 @@ fun UpdateAudioListMetadata(
                         else onSubmit(name)
                     }, enabled = enabled
                 ) { Text("Rename") }
+            }
+        }
+    }
+}
+
+@Composable
+fun LyricsListDialog(
+    showDialog: Boolean, onDismiss: () -> Unit, onSubmit: (String) -> Unit, getUIStyle: GetUIStyle,
+    enabled: Boolean, list: List<LyricsWithAudio>
+) {
+    if (showDialog) {
+        Dialog(onDismissRequest = {
+            if (enabled) onDismiss()
+        }) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(getUIStyle.dialogBackGroundColor(), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 4.dp, vertical = 25.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                item {
+                    if (list.isEmpty())
+                        Text("No lyrics available")
+                    else
+                        Text("Long Press to expand lyrics details")
+                }
+                items(list) { item ->
+                    LyricsRow(item, getUIStyle) { onSubmit(item.lyrics.id) }
+                }
             }
         }
     }

@@ -59,8 +59,17 @@ data class AudioWithPls(
             entityColumn = PLAYLIST_ID
         )
     )
-    val playlists: List<Playlist>
+    val playlists: List<Playlist>,
+    @Relation(entity = Lyrics::class, parentColumn = "lyrics_id", entityColumn = "id")
+    val lyrics: Lyrics?
 ) : Parcelable
+
+@Parcelize
+data class LyricsWithAudio(
+    @Embedded val lyrics: Lyrics,
+    @Relation(entity = AudioFile::class, parentColumn = "id", entityColumn = "lyrics_id")
+    val audios: List<AudioFile>
+): Parcelable
 
 @Parcelize
 data class BucketWithAudio(
@@ -70,4 +79,4 @@ data class BucketWithAudio(
         parentColumn = "id", entityColumn = "bucket_id"
     )
     val audioList: List<AudioFile>
-): Parcelable
+) : Parcelable

@@ -3,6 +3,7 @@ package com.xandy.lite.views.edit.audio
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -29,15 +31,21 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xandy.lite.R
+import com.xandy.lite.controllers.view.models.EditAudioVM
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.db.tables.LyricLine
+import com.xandy.lite.db.tables.Lyrics
+import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.theme.GetUIStyle
-
 
 @Composable
 fun VerticalEditAudioView(
-    audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean,
-    onUpdate: (AudioFile) -> Unit, allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle
+    audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean, lyrics: Lyrics,
+    onLyricsChange: (Lyrics) -> Unit, onUpdate: (AudioFile, Lyrics?) -> Unit,
+    allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle, set: List<LyricLine>,
+    editAudioVM: EditAudioVM
 ) {
+    val ci = ContentIcons(getUIStyle)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -91,31 +99,43 @@ fun VerticalEditAudioView(
                 .padding(8.dp),
             selectedDay = audio.day, selectedYear = audio.year, selectedMonth = audio.month,
             onYearSelected = { onAudioChange(audio.copy(year = it)) },
-            onDaySelected = { if(audio.month != null) onAudioChange(audio.copy(day = it)) },
+            onDaySelected = { if (audio.month != null) onAudioChange(audio.copy(day = it)) },
             onMonthSelected = { onAudioChange(audio.copy(month = it)) }
         )
         Text(text = "Picture", textDecoration = TextDecoration.Underline)
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(audio.picture)
-                .crossfade(true)
-                .build(),
-            contentDescription = "Album art",
-            placeholder = painterResource(R.drawable.unknown_track),
-            error = painterResource(R.drawable.unknown_track),
-            modifier = Modifier
-                .size(100.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .padding(6.dp),
-            contentScale = ContentScale.Crop
-        )
-        ImagePicker(
-            allMediaArtwork, enabled, isLandscape = false, getUIStyle = getUIStyle
-        ) { picture ->
-            onAudioChange(audio.copy(picture = picture))
+        Row(
+            modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(audio.picture)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Album art",
+                placeholder = painterResource(R.drawable.unknown_track),
+                error = painterResource(R.drawable.unknown_track),
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .padding(6.dp),
+                contentScale = ContentScale.Crop
+            )
+            ImagePicker(
+                allMediaArtwork, enabled, isLandscape = false, getUIStyle = getUIStyle
+            ) { picture ->
+                onAudioChange(audio.copy(picture = picture))
+            }
         }
-        Spacer(Modifier.padding(vertical = 20.dp))
-        Button(onClick = { onUpdate(audio) }, modifier = Modifier.padding(8.dp)) {
+        LyricsOptions(ci, lyrics, audio.durationMillis, set, editAudioVM) {
+            onLyricsChange(it)
+        }
+        Spacer(Modifier.padding(vertical = 10.dp))
+        HorizontalDivider(Modifier.fillMaxWidth())
+        Button(
+            onClick = { onUpdate(audio, lyrics.takeIf { ls -> ls.plain.isNotBlank() }) },
+            modifier = Modifier.padding(8.dp)
+        ) {
             Text("Update Song")
         }
     }

@@ -18,9 +18,7 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
     @Composable
     fun ContentIcon(icon: ImageVector, cd: String? = null, modifier: Modifier = Modifier) {
         Icon(
-            imageVector = icon,
-            modifier = modifier,
-            contentDescription = cd,
+            imageVector = icon, modifier = modifier, contentDescription = cd,
             tint = getUIStyle.themedColor()
         )
     }
@@ -28,9 +26,7 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
     @Composable
     fun ContentIcon(icon: Painter, cd: String? = null, modifier: Modifier = Modifier) {
         Icon(
-            painter = icon,
-            modifier = modifier,
-            contentDescription = cd,
+            painter = icon, modifier = modifier, contentDescription = cd,
             tint = getUIStyle.themedColor()
         )
     }
@@ -38,10 +34,7 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
     @Composable
     fun ContentIcon(icon: Painter, cd: String? = null, modifier: Modifier, tint: Color) {
         Icon(
-            painter = icon,
-            modifier = modifier,
-            contentDescription = cd,
-            tint = tint
+            painter = icon, modifier = modifier, contentDescription = cd, tint = tint
         )
     }
 
@@ -50,10 +43,7 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
         icon: ImageVector, cd: String? = null, modifier: Modifier = Modifier, tint: Color
     ) {
         Icon(
-            imageVector = icon,
-            modifier = modifier,
-            contentDescription = cd,
-            tint = tint
+            imageVector = icon, modifier = modifier, contentDescription = cd, tint = tint
         )
     }
 
@@ -62,9 +52,7 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
         icon: ImageVector, cd: String? = null, modifier: Modifier = Modifier, enabled: Boolean
     ) {
         Icon(
-            imageVector = icon,
-            modifier = modifier,
-            contentDescription = cd,
+            imageVector = icon, modifier = modifier, contentDescription = cd,
             tint = if (enabled) getUIStyle.themedColor() else getUIStyle.disabledThemedColor()
         )
     }
@@ -74,9 +62,7 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
         icon: Painter, cd: String? = null, modifier: Modifier = Modifier, enabled: Boolean
     ) {
         Icon(
-            painter = icon,
-            modifier = modifier,
-            contentDescription = cd,
+            painter = icon, modifier = modifier, contentDescription = cd,
             tint = if (enabled) getUIStyle.themedColor() else getUIStyle.disabledThemedColor()
         )
     }
@@ -86,15 +72,10 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
     fun PercentRefreshButon(
         isLoading: Boolean, percentage: Int, onClick: () -> Unit, color: Color
     ) {
-        if (!isLoading) {
-            IconButton(
-                onClick = onClick,
-                modifier = Modifier
-            ) {
+        if (!isLoading) IconButton(onClick = onClick, modifier = Modifier) {
                 ContentIcon(Icons.Default.Refresh, cd = "Refresh", tint = color)
             }
-        } else {
-            Text(text = "$percentage%")
-        }
+        else Text(text = "$percentage%")
+
     }
 }

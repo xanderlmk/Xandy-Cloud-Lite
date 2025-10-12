@@ -50,6 +50,7 @@ import coil.request.ImageRequest
 import com.xandy.lite.R
 import com.xandy.lite.controllers.shareSingleAudio
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.db.tables.isNotInternal
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.theme.GetUIStyle
 
@@ -59,7 +60,8 @@ fun SongRow(
     song: AudioFile, getUIStyle: GetUIStyle, onClick: () -> Unit, onLongPress: () -> Unit,
     onDelete: () -> Unit, onEdit: () -> Unit, onToggleHide: () -> Unit = {}, onAdd: () -> Unit,
     isSelecting: Boolean, isSelected: Boolean, enabled: Boolean, context: Context,
-    hideAllowed: Pair<Boolean, String> = Pair(false, "")
+    isPickedSong: Boolean,
+    onUpsertLyrics: () -> Unit, hideAllowed: Pair<Boolean, String> = Pair(false, "")
 ) {
     val ci = ContentIcons(getUIStyle)
     Row(
@@ -95,6 +97,8 @@ fun SongRow(
                 Text(
                     song.title, maxLines = 1, style = MaterialTheme.typography.titleMedium,
                     overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (isPickedSong) FontWeight.Bold else null,
+                    color = if (isPickedSong) getUIStyle.pickedSongColor() else Color.Unspecified,
                     modifier = Modifier
                         .padding(start = 4.dp)
                         .fillMaxWidth(.90f), fontSize = 17.sp
@@ -102,6 +106,8 @@ fun SongRow(
                 Text(
                     song.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall,
                     overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (isPickedSong) FontWeight.Bold else null,
+                    color = if (isPickedSong) getUIStyle.pickedSongColor() else Color.Unspecified,
                     modifier = Modifier
                         .padding(start = 4.dp)
                         .fillMaxWidth(.90f)
@@ -125,9 +131,18 @@ fun SongRow(
                             onClick = { expanded = false; onAdd() }
                         )
                         DropdownMenuItem(
+                            text = { Text("Edit Lyrics") },
+                            trailingIcon = {
+                                ci.ContentIcon(painterResource(R.drawable.baseline_lyrics))
+                            },
+                            onClick = { expanded = false; onUpsertLyrics() },
+                            enabled = enabled && song.isNotInternal()
+                        )
+                        DropdownMenuItem(
                             text = { Text("Edit") },
                             trailingIcon = { ci.ContentIcon(Icons.Default.Edit) },
-                            onClick = { expanded = false; onEdit() }, enabled = enabled
+                            onClick = { expanded = false; onEdit() },
+                            enabled = enabled && song.isNotInternal()
                         )
                         DropdownMenuItem(
                             text = { Text("Share") },
@@ -148,7 +163,7 @@ fun SongRow(
                         DropdownMenuItem(
                             text = { Text("Delete") },
                             trailingIcon = { ci.ContentIcon(Icons.Default.Delete) },
-                            onClick = onDelete, enabled = enabled
+                            onClick = onDelete, enabled = enabled && song.isNotInternal()
                         )
                     }
                 }
@@ -160,10 +175,7 @@ fun SongRow(
 
 @Composable
 fun SongRow(
-    song: AudioFile,
-    getUIStyle: GetUIStyle,
-    isPickedSong: Boolean,
-    context: Context,
+    song: AudioFile, getUIStyle: GetUIStyle, isPickedSong: Boolean, context: Context,
     onClick: () -> Unit
 ) {
     Row(

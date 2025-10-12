@@ -2,11 +2,10 @@ package com.xandy.lite.navigation
 
 import android.net.Uri
 import android.util.Log
-import androidx.core.net.toUri
+import androidx.activity.result.IntentSenderRequest
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.session.MediaController
@@ -15,9 +14,11 @@ import com.xandy.lite.controllers.getSlOrderedBy
 import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Playlist
+import com.xandy.lite.models.AudioIds
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.ui.AudioUIState
 import com.xandy.lite.models.ui.LocalAudioStates
+import com.xandy.lite.models.ui.LocalMusicTabs
 import com.xandy.lite.models.ui.order.by.PlaylistOrder
 import com.xandy.lite.models.ui.order.by.SongOrder
 import com.xandy.lite.models.ui.order.by.reverseSort
@@ -28,8 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -100,15 +100,11 @@ class NavViewModel(
     fun updateIsPlaying(isPlaying: Boolean) = songRepository.updateIsPlaying(isPlaying)
     fun updateIsLoading(isLoading: Boolean) = songRepository.updateIsLoading(isLoading)
 
-    fun updatePickedSong(item: MediaItem?) {
-        val targetUri = item?.requestMetadata?.mediaUri
-            ?: item?.localConfiguration?.uri ?: item?.mediaId?.toUri()
-        if (targetUri == null) {
-            Log.e(XANDY_CLOUD, "Failed to get uri"); return
+    fun updatePickedSong(id: String?) {
+        viewModelScope.launch {
+            id ?: return@launch
+            songRepository.updatePickedSong(id)
         }
-        val song = audioFiles.value.list.find { it.song.uri == targetUri }?.song
-        if (song == null) Log.e(XANDY_CLOUD, "Failed to find song.")
-        songRepository.updatePickedSong(song)
     }
 
     fun updateDuration(duration: Long) = songRepository.updateDuration(duration)
@@ -128,14 +124,6 @@ class NavViewModel(
     )
     val plWithAudio = songRepository.pickedPlaylist.stateIn(
         scope = viewModelScope, started = SharingStarted.WhileSubscribed(4_000L),
-        initialValue = null
-    )
-    private val audioUri = MutableStateFlow(savedStateHandle[LOCAL_AUDIO_URI] ?: "")
-    val pickedAudio = audioUri.flatMapLatest { uri ->
-        if (uri.isEmpty()) flowOf(null)
-        else songRepository.getPickedAudio(uri)
-    }.stateIn(
-        scope = viewModelScope, started = SharingStarted.Lazily,
         initialValue = null
     )
     val artworkList = songRepository.allMediaArtwork.stateIn(
@@ -175,14 +163,20 @@ class NavViewModel(
             percent = percentFetched.value, autoUpdate = songRepository.autoUpdateEnabled()
         )
     )
+    val writingEnabled = songRepository.idWritingEnabled.stateIn(
+        viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+        initialValue = false
+    )
 
     fun toggleAutoUpdate(enabled: Boolean) = songRepository.toggleAutoUpdate(enabled)
 
-    fun updateAudioUri(uri: String) = audioUri.update {
-        savedStateHandle[LOCAL_AUDIO_URI] = uri; uri
+    fun toggleWritingEnabled(enabled: Boolean) = viewModelScope.launch {
+        songRepository.toggleIdWriting(enabled)
     }
 
-    suspend fun updateAudioTags(newAudio: AudioFile) = songRepository.updateAudioTags(newAudio)
+    fun updateAudioUri(uri: String) {
+        savedStateHandle[LOCAL_AUDIO_URI] = uri; songRepository.updateAudioUri(uri)
+    }
 
     /** Add Local Songs to a Local Playlist */
     suspend fun addLocalSongsToPL(songIds: List<String>, playlistId: String) =
@@ -192,9 +186,24 @@ class NavViewModel(
     suspend fun removeLocalSongsFromPL(songIds: List<String>, playlistId: String) =
         songRepository.removeLocalSongsFromPl(songIds, playlistId)
 
+    private val _requestEvents = MutableStateFlow<Pair<IntentSenderRequest, List<AudioIds>>?>(null)
+    val requestEvents = _requestEvents.asStateFlow()
     fun updateAudioFiles() = viewModelScope.launch(Dispatchers.IO) {
-        songRepository.updateMediaFiles()
+        val pendingIntent = songRepository.updateMediaFiles()
+        pendingIntent?.let { pending ->
+            _requestEvents.update {
+                Pair(
+                    IntentSenderRequest.Builder(pending.first.intentSender).build(), pending.second
+                )
+            }
+        }
     }
+
+    suspend fun insertSongIdToMetadata() = _requestEvents.value?.let {
+        val result = songRepository.updateSongIdTag(it.second)
+        _requestEvents.update { null }
+        return@let result
+    } ?: true
 
     suspend fun insertLocalPl(name: String) = songRepository.addLocalPlaylist(name)
     fun updatePlUUID(s: String) = viewModelScope.launch {
@@ -238,10 +247,28 @@ class NavViewModel(
 
     suspend fun showAudios(uris: List<String>) = songRepository.showAudioFiles(uris)
 
-    suspend fun deleteAudios(uris: List<String>) =
-        songRepository.deleteLocalAudios(uris.map { it.toUri() })
+    suspend fun deleteAudios(ids: List<String>) =
+        songRepository.deleteLocalAudios(ids)
 
     fun toggleSong(songId: String) = uiRepository.toggleSong(songId)
+
+    /** Selects all the songs based on the query filter */
+    fun selectAllSongs() = viewModelScope.launch {
+        val query = query.value
+        val isSearching = isSearching.value
+        val filtered =
+            if (localTab.value == LocalMusicTabs.LIBRARY) audioFiles.value.list.filter { audio ->
+                if (query.isBlank() || !isSearching) return@filter true
+                audio.song.title.contains(query, ignoreCase = true) ||
+                        audio.song.artist.contains(query, ignoreCase = true)
+            }.map { it.song } else songRepository.hiddenAudio.first().filter { audio ->
+                if (query.isBlank() || !isSearching) return@filter true
+                audio.title.contains(query, ignoreCase = true) ||
+                        audio.artist.contains(query, ignoreCase = true)
+            }
+
+        uiRepository.selectAll(filtered.map { it.id })
+    }
 
     suspend fun updateLocalPlArtwork(pl: Playlist, newPic: Uri) =
         songRepository.updatePlArtwork(name = pl.name, newPic = newPic, currentPic = pl.picture)
@@ -254,6 +281,9 @@ class NavViewModel(
 
     init {
         if (songRepository.autoUpdateEnabled()) viewModelScope.launch { updateAudioFiles() }
+        savedStateHandle.get<String?>(LOCAL_AUDIO_URI)?.let {
+            songRepository.updateAudioUri(it)
+        }
     }
 
     suspend fun updateArtistsOfAL(ids: List<String>, artist: String) =

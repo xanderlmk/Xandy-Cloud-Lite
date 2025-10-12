@@ -1,7 +1,6 @@
 package com.xandy.lite.db.daos
 
 import android.net.Uri
-import androidx.core.net.toUri
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
@@ -9,11 +8,12 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.xandy.lite.db.AudioSongId
+import com.xandy.lite.db.PlaylistName
 import com.xandy.lite.db.tables.PlaylistSongOrder
 import com.xandy.lite.db.tables.LocalPlsWithAudio
 import com.xandy.lite.db.tables.PLSongCrossRef
 import com.xandy.lite.db.tables.Playlist
-import com.xandy.lite.models.ui.PlaylistName
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -74,22 +74,29 @@ interface PlaylistDao {
     @Query("""SELECT playlist_id FROM local_playlist where id = :id""")
     suspend fun getPlaylistNameById(id: String): PlaylistName
 
+    @Query("""
+        SELECT song_id FROM local_audio WHERE uri in (:uris)
+    """)
+    suspend fun getIdsFromUris(uris: List<String>): List<AudioSongId>
+
     @Transaction
-    suspend fun addSongsToPl(songIds: List<String>, playlistId: String) {
+    suspend fun addSongsToPl(songUris: List<String>, playlistId: String) {
         val n = getPlaylistNameById(playlistId)
+        val songIds = getIdsFromUris(songUris)
         songIds.forEach {
             addSongToPlaylist(
-                PLSongCrossRef(songId = it.toUri(), playlistId = n.name)
+                PLSongCrossRef(songId = it.id, playlistId = n.name)
             )
         }
     }
     @Transaction
-    suspend fun addPlWithSongs(songIds: List<String>, pl: Playlist) {
+    suspend fun addPlWithSongs(songUris: List<String>, pl: Playlist) {
         insertPlaylist(pl)
         insertPLOrderBy(PlaylistSongOrder(pl.name))
+        val songIds = getIdsFromUris(songUris)
         songIds.forEach {
             addSongToPlaylist(
-                PLSongCrossRef(songId = it.toUri(), playlistId = pl.name)
+                PLSongCrossRef(songId = it.id, playlistId = pl.name)
             )
         }
     }

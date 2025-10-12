@@ -1,5 +1,6 @@
 package com.xandy.lite.views
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -9,6 +10,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -18,17 +23,19 @@ import com.xandy.lite.controllers.view.models.LocalArtistVM
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.models.ui.Artist
 import com.xandy.lite.ui.functions.ContentIcons
+import com.xandy.lite.ui.functions.LyricsListDialog
 import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.PlayOptions
 import com.xandy.lite.ui.theme.GetUIStyle
+import kotlinx.coroutines.launch
 
 
 @Composable
 fun LocalArtistView(
-    artist: Artist, modifier: Modifier, enabled: Boolean, getUIStyle: GetUIStyle,
+    artist: Artist, currentId: String, modifier: Modifier, enabled: Boolean, getUIStyle: GetUIStyle,
     onDelete: (AudioFile) -> Unit, onAdd: (String) -> Unit, onEdit: (String) -> Unit,
-    vm: LocalArtistVM
+    onEnabled: (Boolean) -> Unit, vm: LocalArtistVM
 ) {
     val selectedSongSet = vm.selectedSongIds.collectAsStateWithLifecycle().value.toSet()
     val isSelecting by vm.isSelecting.collectAsStateWithLifecycle()
@@ -55,6 +62,10 @@ fun LocalArtistView(
         audio.title.contains(query, ignoreCase = true) ||
                 audio.artist.contains(query, ignoreCase = true)
     }
+    var showDialog by rememberSaveable { mutableStateOf(Pair(false, "")) }
+    val lyricsList by vm.lyricsList.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
     SongLazyColumn(
         list = filtered, enabled = enabled, getUIStyle = getUIStyle, isSelecting = isSelecting,
         onClick = { audio ->
@@ -65,13 +76,14 @@ fun LocalArtistView(
         onLongPress = {
             if (isSelecting) vm.toggleSong(it)
             else vm.startSelecting(it)
-        }, onDelete = onDelete,
+        }, onDelete = onDelete, currentId = currentId,
         modifier = modifier
             .fillMaxWidth()
             .padding(top = 4.dp), selectedSongSet = selectedSongSet,
+        onUpsertLyrics = { showDialog = Pair(true, it) },
         topContent = {
             item {
-                Artwork(artist.picture, LocalContext.current,pictureModifier)
+                Artwork(artist.picture, LocalContext.current, pictureModifier)
                 Text(
                     text = artist.name,
                     style = MaterialTheme.typography.displayLarge, fontSize = 20.sp,
@@ -105,6 +117,29 @@ fun LocalArtistView(
                         }
                     }
                 )
+            }
+        }
+    )
+    LyricsListDialog(
+        showDialog = showDialog.first, onDismiss = { showDialog = Pair(false, "") },
+        getUIStyle = getUIStyle, list = lyricsList, enabled = enabled,
+        onSubmit = { lyricsId ->
+            coroutineScope.launch {
+                val songId = showDialog.second
+                if (songId.isBlank()) {
+                    Toast.makeText(context, "Null song", Toast.LENGTH_SHORT).show()
+                    showDialog = Pair(false, "")
+                    return@launch
+                }
+                onEnabled(false)
+                val result =
+                    vm.updateSongLyrics(lyricsId = lyricsId, songUri = songId)
+                if (!result)
+                    Toast.makeText(
+                        context, "Failed to add lyrics to $songId", Toast.LENGTH_SHORT
+                    ).show()
+                onEnabled(true)
+                showDialog = Pair(false, "")
             }
         }
     )

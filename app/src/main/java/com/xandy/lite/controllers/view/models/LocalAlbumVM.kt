@@ -35,6 +35,10 @@ class LocalAlbumVM(
     val pickedQueueName = songRepository.pickedQueueName.stateIn(
         scope = viewModelScope, started = SharingStarted.WhileSubscribed(4_000L), initialValue = ""
     )
+    val lyricsList = songRepository.lyricsFlow().stateIn(
+        scope = viewModelScope, started = SharingStarted.Lazily,
+        initialValue = emptyList()
+    )
 
     fun startSelecting(songId: String) = uiRepository.startSelectingSongs(songId)
 
@@ -45,7 +49,7 @@ class LocalAlbumVM(
             setQueue(ctrl, list, song) {
                 viewModelScope.launch { songRepository.setNewQueue(it, albumName) }
             }
-            songRepository.updatePickedSong(song)
+            songRepository.updatePickedSong(song.id)
         }
     }
 
@@ -57,4 +61,6 @@ class LocalAlbumVM(
                 )
             selectSong(song, list, albumName)
         }
+    suspend fun updateSongLyrics(lyricsId:String, songUri: String) =
+        songRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
 }

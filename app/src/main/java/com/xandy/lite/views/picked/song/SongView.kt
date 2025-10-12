@@ -2,11 +2,15 @@ package com.xandy.lite.views.picked.song
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -14,58 +18,65 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.session.MediaController
 import com.xandy.lite.controllers.view.models.PickedSongVM
-import com.xandy.lite.models.ui.itemKey
+import com.xandy.lite.models.ui.SongDetails
+import com.xandy.lite.models.ui.SongToggle
+import com.xandy.lite.models.itemKey
 import com.xandy.lite.models.ui.order.by.reverseSort
 import com.xandy.lite.models.ui.order.by.toOrderedByClass
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.collectPickedSongVMStatesWithLifecycle
 import com.xandy.lite.ui.theme.GetUIStyle
+import kotlinx.coroutines.launch
 
 
 @Composable
 fun SongView(
     songVM: PickedSongVM, getUIStyle: GetUIStyle,
-    onToggle: () -> Unit, showQueue: Boolean
+    onToggle: (SongToggle) -> Unit, songToggle: SongToggle
 ) {
     val song by songVM.song.collectAsStateWithLifecycle()
     val mediaController by songVM.mediaController.collectAsStateWithLifecycle()
-    val sortedQueue by songVM.sortedQueue.collectAsStateWithLifecycle()
-    val queueOrder by songVM.queueOrder.collectAsStateWithLifecycle()
-    val queueAsc by songVM.queueAsc.collectAsStateWithLifecycle()
-    val songIdx = sortedQueue.find { it.mediaItem.itemKey() == song?.id }?.let {
-        sortedQueue.indexOf(it).takeIf { idx -> idx >= 0 }?.plus(1) ?: return
+    val states = collectPickedSongVMStatesWithLifecycle(songVM)
+    val songIdx = states.sortedQueue.find { it.mediaItem.itemKey() == song?.id }?.let {
+        states.sortedQueue.indexOf(it).takeIf { idx -> idx >= 0 }?.plus(1) ?: return
     } ?: 1
     val ci = ContentIcons(getUIStyle)
-    val states = collectPickedSongVMStatesWithLifecycle(songVM)
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     mediaController?.let { controller ->
         if (isLandscape)
             HorizontalSongView(
-                controller = controller, states = states, songVM = songVM, showQueue = showQueue,
+                controller = controller, states = states, songVM = songVM, songToggle = songToggle,
                 onToggle = onToggle, onUpdateOrder = {
-                    songVM.updateQueueOrder(it.toOrderedByClass(queueAsc))
+                    songVM.updateQueueOrder(it.toOrderedByClass(states.queueAsc))
                 },
                 onReverseOrder = {
-                    songVM.updateQueueOrder(queueOrder.reverseSort())
+                    songVM.updateQueueOrder(states.queueOrder.reverseSort())
                 }, ci = ci, getUIStyle = getUIStyle, songIdx = songIdx
             )
         else
             VerticalSongView(
-                controller = controller, states = states, songVM = songVM, showQueue = showQueue,
+                controller = controller, states = states, songVM = songVM, songToggle = songToggle,
                 onToggle = onToggle, onUpdateOrder = {
-                    songVM.updateQueueOrder(it.toOrderedByClass(queueAsc))
+                    songVM.updateQueueOrder(it.toOrderedByClass(states.queueAsc))
                 },
                 onReverseOrder = {
-                    songVM.updateQueueOrder(queueOrder.reverseSort())
+                    songVM.updateQueueOrder(states.queueOrder.reverseSort())
                 }, ci = ci, getUIStyle = getUIStyle, songIdx = songIdx
             )
     }
@@ -111,6 +122,72 @@ fun PlaybackProgress(
                 dragFraction = fraction
             }
         }
+    }
+}
+
+@Composable
+fun SongLyrics(song: SongDetails?, position: Long, getUIStyle: GetUIStyle, modifier: Modifier) {
+    val list = song?.lyrics?.scroll?.toList() ?: emptyList()
+    val plainLyrics = song?.lyrics?.plain
+    val state = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    var viewPortHeight by rememberSaveable { mutableIntStateOf(0) }
+    val itemHeights = rememberSaveable { mutableListOf<Int>() }
+    LaunchedEffect(list.size) {
+        when {
+            itemHeights.size < list.size -> {
+                repeat(list.size - itemHeights.size) { itemHeights.add(0) }
+            }
+            itemHeights.size > list.size -> {
+                for (i in itemHeights.size - 1 downTo list.size) itemHeights.removeAt(i)
+            }
+        }
+    }
+    LaunchedEffect(position) {
+        val index =
+            list.indexOfFirst { position in it.range }.takeIf { it != -1 } ?: return@LaunchedEffect
+        coroutineScope.launch {
+            val itemH = itemHeights.getOrNull(index) ?: 0
+            if (viewPortHeight > 0 && itemH > 0) {
+                val desiredOffset = (itemH / 2 - viewPortHeight / 2)
+                state.animateScrollToItem(index, desiredOffset)
+            } else state.animateScrollToItem(index)
+        }
+
+    }
+    LazyColumn(
+        state = state,
+        modifier = modifier
+            .padding(horizontal = 4.dp)
+            .onSizeChanged { viewPortHeight = it.height },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (list.isNotEmpty())
+            itemsIndexed(list) { index, lyricLine ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { cords ->
+                            if (index !in itemHeights.indices) return@onGloballyPositioned
+                            itemHeights[index] = cords.size.height
+                        }
+                ) {
+                    Text(
+                        text = lyricLine.text, style = MaterialTheme.typography.displaySmall,
+                        fontWeight = if (position in lyricLine.range) FontWeight.SemiBold else null,
+                        color = if (position in lyricLine.range) getUIStyle.themedColor()
+                        else getUIStyle.tabTextColor(false)
+                    )
+                }
+            }
+        else
+            item {
+                Text(
+                    text = plainLyrics ?: "No Lyrics Available",
+                    style = MaterialTheme.typography.displaySmall
+                )
+            }
     }
 }
 

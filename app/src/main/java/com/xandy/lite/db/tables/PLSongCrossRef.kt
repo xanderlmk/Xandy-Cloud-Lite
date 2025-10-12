@@ -1,6 +1,5 @@
 package com.xandy.lite.db.tables
 
-import android.net.Uri
 import android.os.Parcelable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
@@ -40,7 +39,7 @@ private const val PLAYLIST_ID = "playlist_id"
 )
 data class PLSongCrossRef(
     @ColumnInfo(name = SONG_ID)
-    val songId: Uri,
+    val songId: String,
     @ColumnInfo(name = PLAYLIST_ID)
     val playlistId: String,
     @ColumnInfo(defaultValue = "CURRENT_TIMESTAMP")

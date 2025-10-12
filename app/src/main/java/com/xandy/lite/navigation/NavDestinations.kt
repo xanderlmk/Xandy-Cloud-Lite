@@ -54,3 +54,13 @@ object LocalBucketDestination : NavDestinations {
 object LocalGenreDestination : NavDestinations {
     override val route = "local_genre"
 }
+
+@Serializable
+object SettingsDestination: NavDestinations {
+    override val route = "settings"
+}
+
+@Serializable
+object LyricsListDestination: NavDestinations {
+    override val route = "lyrics_list"
+}

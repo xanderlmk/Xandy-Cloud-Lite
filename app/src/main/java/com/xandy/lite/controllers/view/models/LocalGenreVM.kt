@@ -45,8 +45,7 @@ class LocalGenreVM(
             setQueue(ctrl, list, song) {
                 viewModelScope.launch { songRepository.setNewQueue(it, albumName) }
             }
-            songRepository.updatePickedSong(song)
-        }
+            songRepository.updatePickedSong(song.id)        }
     }
 
     fun setShuffleOn(song: AudioFile, list: List<AudioFile>, albumName: String) =
@@ -57,4 +56,10 @@ class LocalGenreVM(
                 )
             selectSong(song, list, albumName)
         }
+    val lyricsList = songRepository.lyricsFlow().stateIn(
+        scope = viewModelScope, started = SharingStarted.Lazily,
+        initialValue = emptyList()
+    )
+    suspend fun updateSongLyrics(lyricsId:String, songUri: String) =
+        songRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
 }

@@ -14,7 +14,7 @@ import androidx.media3.session.MediaController
 import com.xandy.lite.controllers.setInitialQueue
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.dataStore
-import com.xandy.lite.models.ui.itemKey
+import com.xandy.lite.models.itemKey
 import com.xandy.lite.models.ui.order.by.OrderBy
 import com.xandy.lite.models.ui.order.by.OrderPlsBy
 import com.xandy.lite.models.ui.order.by.OrderQueueBy
@@ -33,7 +33,7 @@ import kotlinx.serialization.json.Json
 
 class MediaControllerStates(private val appPref: SharedPreferences, private val context: Context) {
     companion object {
-        private const val DELAYED_CHECK = 850L
+        private const val DELAYED_CHECK = 425L
         private val CURRENT_MI = stringPreferencesKey("current_media_item")
         private val QUEUE_NAME = stringPreferencesKey("picked_queue_name")
     }
@@ -95,18 +95,15 @@ class MediaControllerStates(private val appPref: SharedPreferences, private val 
         _mediaController.update { mc }
         if (queue.isEmpty() || mc.mediaItemCount > 0) return
         val itemKey = getInitialMediaKey(context)
-
         val first = queue.find { it.itemKey() == itemKey }
         val index = queue.indexOf(first).takeIf { it >= 0 } ?: 0
         _mediaController.value?.let { setInitialQueue(it, queue, index) }
-        Log.d(XANDY_CLOUD, "Updated MC")
-
     }
 
     fun resetMediaController() {
         try {
             _mediaController.update { it?.release(); null }
-            Log.d(XANDY_CLOUD, "Released MC")
+            Log.i(XANDY_CLOUD, "Released MC")
         } catch (_: Exception) {
             _mediaController.update { null }
         }
@@ -150,9 +147,7 @@ class MediaControllerStates(private val appPref: SharedPreferences, private val 
         return@withContext
     }
     private suspend fun getInitialMediaKey(context: Context) = try {
-        context.dataStore.data.map { preferences ->
-            preferences[CURRENT_MI] ?: ""
-        }.first()
+        context.dataStore.data.map { preferences -> preferences[CURRENT_MI] ?: "" }.first()
     } catch (e: Exception) {
         Log.e(XANDY_CLOUD, "Failed to get repeat mode: $e")
         ""

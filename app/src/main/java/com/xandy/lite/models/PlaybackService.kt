@@ -22,6 +22,7 @@ import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
@@ -39,7 +40,6 @@ import com.xandy.lite.db.XandyDatabase.Companion.getDatabase
 import com.xandy.lite.db.tables.toMediaItems
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.dataStore
-import com.xandy.lite.models.ui.itemKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -130,12 +130,25 @@ class PlaybackService : MediaSessionService() {
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
+        val isPixel7Pro = Build.MODEL.contains("Pixel 7 Pro", ignoreCase = true)
+        Log.i(XANDY_CLOUD, "Is Pixel phone: $isPixel7Pro")
         val audioOffloadPreferences =
             AudioOffloadPreferences.Builder()
-                .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
+                .setAudioOffloadMode(
+                    if (isPixel7Pro) AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+                    else AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                )
                 .setIsGaplessSupportRequired(true)
                 .build()
-        player = ExoPlayer.Builder(this).build().apply {
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                30_000,  // minBufferMs - 50_000 -> 30_000
+                60_000,  // maxBufferMs
+                1_500,   // bufferForPlaybackMs 1_000 -> 1_500
+                3_000    // bufferForPlaybackAfterRebufferMs 2_000 -> 3_000
+            )
+            .build()
+        player = ExoPlayer.Builder(this).setLoadControl(loadControl).build().apply {
             setAudioAttributes(audioAttributes, true)
             playWhenReady = true
             trackSelectionParameters = this.trackSelectionParameters

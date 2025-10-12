@@ -23,27 +23,28 @@ fun SongLazyColumn(
     list: List<AudioFile>, enabled: Boolean, onClick: (AudioFile) -> Unit, getUIStyle: GetUIStyle,
     onEdit: (String) -> Unit, onDelete: (AudioFile) -> Unit, onLongPress: (String) -> Unit,
     onAdd: (String) -> Unit, onToggleHide: (Uri) -> Unit = {}, selectedSongSet: Set<String>,
-    hideAllowed: Pair<Boolean, String> = Pair(false, ""),
+    hideAllowed: Pair<Boolean, String> = Pair(false, ""),onUpsertLyrics: (String) -> Unit,
     topContent: LazyListScope.() -> Unit = {}, state: LazyListState = rememberLazyListState(),
-    isSelecting: Boolean, modifier: Modifier
+    currentId: String, isSelecting: Boolean, modifier: Modifier
 ) {
     LazyColumn(
         modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, state = state
     ) {
         topContent()
         items(list, key = { it.uri }) { audio ->
-            val songId = audio.uri.toString()
-            val selected = songId in selectedSongSet
+            val selected = audio.id in selectedSongSet
+            val isPicked = currentId == audio.id
             SongRow(
                 audio, getUIStyle, isSelected = selected, enabled = enabled,
-                context = LocalContext.current,
+                context = LocalContext.current, isPickedSong = isPicked,
                 onClick = { onClick(audio) },
                 onEdit = { onEdit(audio.uri.toString()) },
                 onDelete = { onDelete(audio) },
-                onLongPress = { onLongPress(audio.uri.toString()) },
+                onLongPress = { onLongPress(audio.id) },
                 onToggleHide = { onToggleHide(audio.uri) },
                 isSelecting = isSelecting, hideAllowed = hideAllowed,
-                onAdd = { onAdd(audio.uri.toString()) }
+                onAdd = { onAdd(audio.uri.toString()) },
+                onUpsertLyrics = { onUpsertLyrics(audio.uri.toString()) }
             )
         }
     }
@@ -53,27 +54,31 @@ fun SongLazyColumn(
 fun SongLazyColumn(
     list: List<AudioWithPls>, enabled: Boolean, onClick: (AudioFile) -> Unit,
     getUIStyle: GetUIStyle, onAdd: (String) -> Unit, onToggleHide: (Uri) -> Unit = {},
-    onEdit: (String) -> Unit, onDelete: (AudioFile) -> Unit, onLongPress: (String) -> Unit,
-    hideAllowed: Pair<Boolean, String> = Pair(false, ""), selectedSongSet: Set<String>,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
+    onEdit: (String) -> Unit, onDelete: (AudioFile) -> Unit, onUpsertLyrics: (String) -> Unit,
+    onLongPress: (String) -> Unit, hideAllowed: Pair<Boolean, String> = Pair(false, ""),
+    selectedSongSet: Set<String>, contentPadding: PaddingValues = PaddingValues(0.dp),
+    currentId: String,
     state: LazyListState = rememberLazyListState(), isSelecting: Boolean, modifier: Modifier
 ) {
     LazyColumn(
         modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, state = state,
         contentPadding = contentPadding
     ) {
-        items(list, key = { it.song.uri.toString() }) { pair ->
-            val selected = pair.song.uri.toString() in selectedSongSet
+        items(list, key = { it.song.uri.toString() }) { af ->
+            val selected = af.song.id in selectedSongSet
+            val isPicked = currentId == af.song.id
+
             SongRow(
-                pair.song, getUIStyle = getUIStyle, isSelected = selected,
-                isSelecting = isSelecting, enabled = enabled,
+                af.song, getUIStyle = getUIStyle, isSelected = selected,
+                isSelecting = isSelecting, enabled = enabled, isPickedSong = isPicked,
                 context = LocalContext.current, hideAllowed = hideAllowed,
-                onClick = { onClick(pair.song) },
-                onDelete = { onDelete(pair.song) },
-                onEdit = { onEdit(pair.song.uri.toString()) },
-                onLongPress = { onLongPress(pair.song.uri.toString()) },
-                onToggleHide = { onToggleHide(pair.song.uri) },
-                onAdd = { onAdd(pair.song.uri.toString()) }
+                onClick = { onClick(af.song) },
+                onDelete = { onDelete(af.song) },
+                onEdit = { onEdit(af.song.uri.toString()) },
+                onLongPress = { onLongPress(af.song.id) },
+                onToggleHide = { onToggleHide(af.song.uri) },
+                onAdd = { onAdd(af.song.uri.toString()) },
+                onUpsertLyrics = { onUpsertLyrics(af.song.uri.toString()) }
             )
         }
     }
