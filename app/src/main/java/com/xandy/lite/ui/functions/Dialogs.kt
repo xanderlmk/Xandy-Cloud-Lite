@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -193,4 +194,58 @@ fun LyricsListDialog(
             }
         }
     }
+}
+
+@Composable
+fun ExportLyricDialog(
+    onDismiss: () -> Unit, onSubmit: (String?) -> Unit, getUIStyle: GetUIStyle, enabled: Boolean
+) {
+    var fileName by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        title = {
+            Text("Export lyrics?")
+        }, confirmButton = {
+            Button(
+                onClick = { onSubmit(fileName.takeIf { it.isNotBlank() }) }, enabled = enabled
+            ) { Text("Export") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss, enabled = enabled) { Text("Cancel") }
+        }, text = {
+            TextField(
+                value = fileName,
+                onValueChange = { fileName = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                suffix = { Text(".xclf") }
+            )
+        },
+        titleContentColor = getUIStyle.themedOnContainerColor(),
+        textContentColor = getUIStyle.themedOnContainerColor(),
+        containerColor = getUIStyle.dialogBackGroundColor()
+    )
+}
+
+@Composable
+fun OverwriteItem(
+    onDismiss: () -> Unit, onSubmit: () -> Unit, title: String,  confirmButtonText: String,
+    text: String, getUIStyle: GetUIStyle, enabled: Boolean
+) {
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        title = { Text(title) },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit() }, enabled = enabled
+            ) { Text(confirmButtonText) }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss, enabled = enabled) { Text("Cancel") }
+        },
+        text = { Text(text = text, modifier = Modifier.fillMaxWidth()) },
+        titleContentColor = getUIStyle.themedOnContainerColor(),
+        textContentColor = getUIStyle.themedOnContainerColor(),
+        containerColor = getUIStyle.dialogBackGroundColor()
+    )
 }

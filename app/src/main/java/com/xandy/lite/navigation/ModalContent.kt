@@ -55,7 +55,7 @@ class ModalContent(
         val fontSize = returnFontSizeBasedOnDp()
         CustomRow(onClick = { onNavigate(LocalMusicDestination.route) }) {
             Text(
-                text = "Home", fontSize = fontSize, color = getUIStyle.themedColor(),
+                text = "Home", fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
@@ -70,7 +70,7 @@ class ModalContent(
         val fontSize = returnFontSizeBasedOnDp()
         CustomRow(onClick = { onNavigate(LyricsListDestination.route)}) {
             Text(
-                text = "Lyric List", fontSize = fontSize, color = getUIStyle.themedColor(),
+                text = "Lyric List", fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
@@ -86,7 +86,7 @@ class ModalContent(
         CustomRow(onClick = { onNavigate(SettingsDestination.route) })
         {
             Text(
-                text = "Settings", fontSize = fontSize, color = getUIStyle.themedColor(),
+                text = "Settings", fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
@@ -103,7 +103,7 @@ class ModalContent(
         val icon = if (autoUpdate) R.drawable.toggle_on else R.drawable.toggle_off
         CustomRow(onClick = { navVM.toggleAutoUpdate(!autoUpdate) }) {
             Text(
-                text = text, fontSize = fontSize, color = getUIStyle.themedColor(),
+                text = text, fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
@@ -121,7 +121,7 @@ class ModalContent(
         val icon = if (writingEnabled) R.drawable.toggle_on else R.drawable.toggle_off
         CustomRow(onClick = { navVM.toggleWritingEnabled(!writingEnabled) }) {
             Text(
-                text = text, fontSize = fontSize, color = getUIStyle.themedColor(),
+                text = text, fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(

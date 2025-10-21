@@ -60,9 +60,7 @@ fun LocalPlaylistView(
         songsInPL.songs.takeIf { it.isNotEmpty() }
             ?.let { songs ->
                 val index = songs.indices.random()
-                playlistVM.selectSong(
-                    songs[index].data, songs.map { it.data }, name
-                )
+                playlistVM.selectSong(songs[index].data, songs.map { it.data }, name)
             }
     }
     val modifier =
@@ -110,17 +108,14 @@ fun LocalPlaylistView(
                         songsInPL.order, ci, onUpdate = { order ->
                             coroutineScope.launch {
                                 playlistVM.updateOrder(
-                                    order,
-                                    songsInPL.playlist
+                                    order, songsInPL.playlist
                                 )
                             }
                         }, onShuffle = {
                             songsInPL.songs.takeIf { it.isNotEmpty() }?.let { songs ->
                                 val index = songs.indices.random()
                                 playlistVM.setShuffleOn(
-                                    songs[index].data,
-                                    songs.map { it.data },
-                                    name
+                                    songs[index].data, songs.map { it.data }, name
                                 )
                             }
                         }, onPlay = {
@@ -143,7 +138,7 @@ fun LocalPlaylistView(
 
                 items(filtered, key = { it.data.uri.toString() }) { song ->
                     val id = song.data.id
-                    val selected = song.data.uri.toString() in selectedSongSet
+                    val selected = song.data.id in selectedSongSet
                     SongRow(
                         song.data, getUIStyle, isSelecting = isSelecting, isSelected = selected,
                         onClick = {
@@ -154,7 +149,7 @@ fun LocalPlaylistView(
                         }, enabled = !alIsLoading,
                         onLongPress = {
                             if (isSelecting) playlistVM.toggleSong(song.data.id)
-                            else playlistVM.startSelecting(song.data.uri.toString())
+                            else playlistVM.startSelecting(song.data.id)
                         },
                         onDelete = {
                             coroutineScope.launch {
@@ -165,7 +160,7 @@ fun LocalPlaylistView(
                             }
                         }, context = LocalContext.current, isPickedSong = currentId == id ,
                         onEdit = { onEditSong(song.data.uri.toString()) },
-                        onAdd = { onAdd(song.data.uri.toString()) },
+                        onAdd = { onAdd(song.data.id) },
                         onUpsertLyrics = { showDialog = Pair(true, song.data.uri.toString()) }
                     )
                 }

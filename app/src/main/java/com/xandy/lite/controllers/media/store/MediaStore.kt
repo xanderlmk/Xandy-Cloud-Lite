@@ -94,7 +94,7 @@ private fun queryMediaRows(
             chunk.clear()
         }
     }
-}.flowOn(Dispatchers.IO.limitedParallelism(2, "Query media rows"))
+}.flowOn(Dispatchers.IO.limitedParallelism(1, "Query media rows"))
 
 /**
  * Returns a flow which is a pair, Audio file and a Boolean
@@ -189,7 +189,7 @@ fun loadAudioFiles(
         mutableList.clear()
         onProgress(0)
     }
-}.flowOn(Dispatchers.IO.limitedParallelism(2, "File  Retrieval"))
+}.flowOn(Dispatchers.IO.limitedParallelism(1, "File  Retrieval"))
 
 data class DateParts(val year: Int?, val month: Int?, val day: Int?)
 

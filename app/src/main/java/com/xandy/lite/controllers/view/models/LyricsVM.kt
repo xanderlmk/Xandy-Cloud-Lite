@@ -12,6 +12,7 @@ class LyricsVM(private val songRepository: SongRepository) : ViewModel() {
         scope = viewModelScope, started = SharingStarted.Lazily,
         initialValue = emptyList()
     )
+    suspend fun importLyrics(lyrics: Lyrics) = songRepository.importLyrics(lyrics)
     suspend fun updateLyrics(lyrics: Lyrics) = songRepository.updateLyrics(lyrics)
 
     suspend fun deleteLyrics(lyrics: Lyrics) = songRepository.deleteLyrics(lyrics)

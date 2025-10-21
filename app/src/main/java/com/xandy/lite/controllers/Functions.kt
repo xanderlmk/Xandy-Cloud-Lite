@@ -87,6 +87,7 @@ class Functions(
     suspend fun addLocalSongsToPl(songIds: List<String>, playlistId: String) =
         withContext(Dispatchers.IO) {
             try {
+                Log.i(XANDY_CLOUD, "$songIds")
                 playlistDao.addSongsToPl(songIds, playlistId)
                 true
             } catch (_: Exception) {
@@ -135,7 +136,7 @@ class Functions(
 
     suspend fun updateMediaFiles(
         onProgress: (Int) -> Unit, onUpdate: (Boolean) -> Unit
-    ) = withContext(Dispatchers.IO.limitedParallelism(4, "Update media files")) {
+    ) = withContext(Dispatchers.IO.limitedParallelism(2, "Update media files")) {
         return@withContext try {
             /** A minute to load all media */
             withTimeout(60_000L) {

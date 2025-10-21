@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -35,7 +36,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LocalLibraryStates(
-    audioDao: AudioDao, playlistDao: PlaylistDao, bucketDao: BucketDao,
+    private val audioDao: AudioDao, playlistDao: PlaylistDao, bucketDao: BucketDao,
     mcStates: MediaControllerStates, unknownTrackUri: Uri, private val context: Context
 ) {
     companion object {
@@ -46,6 +47,7 @@ class LocalLibraryStates(
         private val LOCAL_BUCKET_ID = longPreferencesKey("local_bucket_id")
         private val LOCAL_GENRE = stringPreferencesKey("local_genre_name")
         private val ID_WRITE_ENABLE = booleanPreferencesKey("enabled_id_writing")
+        private val LYRICS_ID = stringPreferencesKey("picked_lyrics_id")
         private const val PREFERENCES = "preferences"
         private const val AUTO_UPDATE = "auto_update_enabled"
     }
@@ -92,7 +94,8 @@ class LocalLibraryStates(
         combinePickedNameWithLocalGenre(_localGenreName, localGenres)
 
     suspend fun updateLocalPlUUID(s: String) = withContext(Dispatchers.IO) {
-        try { context.dataStore.edit { settings -> settings[LOCAL_PL] = s }
+        try {
+            context.dataStore.edit { settings -> settings[LOCAL_PL] = s }
         } catch (e: Exception) {
             Log.w(XANDY_CLOUD, "Failed updating playlist name: $e")
             return@withContext
@@ -139,6 +142,22 @@ class LocalLibraryStates(
             return@withContext
         }
     }
+
+    suspend fun updatePickedLyricsId(n: String) = withContext(Dispatchers.IO) {
+        try {
+            context.dataStore.edit { settings ->
+                settings[LYRICS_ID] = n
+            }
+        } catch (e: Exception) {
+            Log.w(XANDY_CLOUD, "Failed updating lyrics id: $e")
+            return@withContext
+        }
+    }
+
+    suspend fun getLyrics() =
+        audioDao.getLyrics(
+            context.dataStore.data.map { preferences -> preferences[LYRICS_ID] ?: "" }.first()
+        )
 
     private val appPref = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 

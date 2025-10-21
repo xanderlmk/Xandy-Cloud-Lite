@@ -34,7 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 )
 @TypeConverters(
     UriTypeConverter::class, TimestampConverter::class, OrderByConverter::class,
-    LyricsConverter::class, FailureCategoryConverter::class
+    LyricsConverter::class, FailureCategoryConverter::class, TranslatedLyricsConverter::class
 )
 abstract class XandyDatabase : RoomDatabase() {
     abstract fun audioDao(): AudioDao

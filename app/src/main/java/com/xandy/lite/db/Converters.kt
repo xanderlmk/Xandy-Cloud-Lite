@@ -5,6 +5,7 @@ import androidx.core.net.toUri
 import androidx.room.TypeConverter
 import com.xandy.lite.db.tables.FailureCategory
 import com.xandy.lite.db.tables.LyricLine
+import com.xandy.lite.db.tables.TranslatedLyrics
 import com.xandy.lite.models.ui.order.by.OrderSongsBy
 import com.xandy.lite.models.ui.order.by.toOrderedString
 import com.xandy.lite.models.ui.order.by.toSongsOrderedByClass
@@ -58,4 +59,14 @@ class FailureCategoryConverter {
     @TypeConverter
     fun textToCategory(text: String) =
         json.decodeFromString<FailureCategory>(text)
+}
+
+class TranslatedLyricsConverter {
+    @TypeConverter
+    fun toString(value: TranslatedLyrics?): String? =
+        value?.let { json.encodeToString(TranslatedLyrics.serializer(), it) }
+
+    @TypeConverter
+    fun toTranslatedLyrics(value: String?) =
+        value?.let { json.decodeFromString<TranslatedLyrics>(it) }
 }

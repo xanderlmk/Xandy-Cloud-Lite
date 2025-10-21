@@ -182,7 +182,6 @@ class SongRepositoryImpl(
     override suspend fun hideAudioFile(uri: String) = functions.hideAudioFile(uri)
     override suspend fun showAudioFile(uri: String) = functions.showAudioFile(uri)
 
-
     private val audioUri = MutableStateFlow("")
     override fun updateAudioUri(uri: String) = audioUri.update { uri }
 
@@ -249,6 +248,10 @@ class SongRepositoryImpl(
     override suspend fun updateGenreOfAL(ids: List<String>, genre: String) =
         functions.updateGenreOfAL(ids, genre)
 
+    override suspend fun getLyrics() = llStates.getLyrics()
+
+    override suspend fun updatePickedLyrics(n: String) = llStates.updatePickedLyricsId(n)
+
     override fun lyricsFlow() = audioDao.getLyricsWithAudio()
 
     override suspend fun updateSongLyrics(lyricsId: String, songUri: String) =
@@ -259,6 +262,8 @@ class SongRepositoryImpl(
 
     override suspend fun deleteLyrics(lyrics: Lyrics) =
         functions.deleteLyrics(lyrics)
+
+    override suspend fun importLyrics(lyrics: Lyrics) = audioDao.importLyrics(lyrics)
 
     override fun autoUpdateEnabled() = llStates.autoUpdateEnabled()
     override fun toggleAutoUpdate(enabled: Boolean) = llStates.toggleAutoUpdate(enabled)

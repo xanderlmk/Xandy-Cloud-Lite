@@ -27,10 +27,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.xandy.lite.R
 import com.xandy.lite.db.tables.LyricsWithAudio
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.theme.GetUIStyle
@@ -46,7 +48,7 @@ fun LyricsRow(l: LyricsWithAudio, getUIStyle: GetUIStyle, onClick: () -> Unit) {
                     onTap = { onClick() }, onLongPress = { toggleDetails = !toggleDetails }
                 )
             }
-            .border(2.dp, getUIStyle.themedColor(), RoundedCornerShape(2.dp))
+            .border(2.dp, getUIStyle.themedOnContainerColor(), RoundedCornerShape(2.dp))
             .padding(horizontal = 6.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.Start
@@ -86,7 +88,7 @@ fun LyricsRow(l: LyricsWithAudio, getUIStyle: GetUIStyle, onClick: () -> Unit) {
 
 @Composable
 fun LyricsRow(
-    l: LyricsWithAudio, onEdit: () -> Unit, onDelete: () -> Unit,
+    l: LyricsWithAudio, onEdit: () -> Unit, onExport: () -> Unit, onDelete: () -> Unit,
     getUIStyle: GetUIStyle
 ) {
     val ci = ContentIcons(getUIStyle)
@@ -99,7 +101,7 @@ fun LyricsRow(
                     onTap = { toggleDetails = !toggleDetails }
                 )
             }
-            .border(2.dp, getUIStyle.themedColor(), RoundedCornerShape(2.dp))
+            .border(2.dp, getUIStyle.themedOnContainerColor(), RoundedCornerShape(2.dp))
             .padding(vertical = 4.dp, horizontal = if (!toggleDetails) 0.dp else 4.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.Start
@@ -132,6 +134,13 @@ fun LyricsRow(
                             text = { Text("Edit") },
                             trailingIcon = { ci.ContentIcon(Icons.Default.Edit) },
                             onClick = { expanded = false; onEdit() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Export") },
+                            trailingIcon = {
+                                ci.ContentIcon(painterResource(R.drawable.outline_file_export))
+                            },
+                            onClick = { expanded = false; onExport() }
                         )
 
                         DropdownMenuItem(

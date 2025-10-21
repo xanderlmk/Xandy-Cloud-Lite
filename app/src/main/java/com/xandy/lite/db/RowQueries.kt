@@ -2,6 +2,7 @@ package com.xandy.lite.db
 
 import android.net.Uri
 import androidx.room.ColumnInfo
+import com.xandy.lite.db.tables.LyricLine
 
 
 private const val SONG_ID = "song_id"
@@ -16,3 +17,4 @@ data class AudioDetails(
 data class AudioSongId(@ColumnInfo(name = SONG_ID) val id: String)
 data class AudioUri(val uri: Uri)
 data class PlaylistName(@ColumnInfo(name = PLAYLIST_ID) val name: String)
+data class LyricsId(val id: String)

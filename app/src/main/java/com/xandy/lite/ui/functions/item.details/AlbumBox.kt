@@ -46,7 +46,7 @@ fun AlbumBox(album: Album, getUIStyle: GetUIStyle, onClick: () -> Unit) {
         Card(
             modifier = Modifier
                 .fillMaxHeight(0.825f)
-                .border(0.5.dp, getUIStyle.themedColor(), RoundedCornerShape(8.dp))
+                .border(0.5.dp, getUIStyle.themedOnContainerColor(), RoundedCornerShape(8.dp))
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)

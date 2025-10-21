@@ -91,10 +91,10 @@ class SongViewActivity : ComponentActivity() {
                         TopAppBar(
                             colors = TopAppBarColors(
                                 containerColor = getUIStyle.topBarColor(),
-                                navigationIconContentColor = getUIStyle.themedColor(),
-                                titleContentColor = getUIStyle.themedColor(),
-                                actionIconContentColor = getUIStyle.themedColor(),
-                                scrolledContainerColor = getUIStyle.themedColor()
+                                navigationIconContentColor = getUIStyle.themedOnContainerColor(),
+                                titleContentColor = getUIStyle.themedOnContainerColor(),
+                                actionIconContentColor = getUIStyle.themedOnContainerColor(),
+                                scrolledContainerColor = getUIStyle.themedOnContainerColor()
                             ),
                             navigationIcon = {
                                 IconButton(onClick = { navigateUpToMain() }) {

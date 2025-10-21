@@ -176,7 +176,7 @@ fun SongLyrics(song: SongDetails?, position: Long, getUIStyle: GetUIStyle, modif
                     Text(
                         text = lyricLine.text, style = MaterialTheme.typography.displaySmall,
                         fontWeight = if (position in lyricLine.range) FontWeight.SemiBold else null,
-                        color = if (position in lyricLine.range) getUIStyle.themedColor()
+                        color = if (position in lyricLine.range) getUIStyle.themedOnContainerColor()
                         else getUIStyle.tabTextColor(false)
                     )
                 }

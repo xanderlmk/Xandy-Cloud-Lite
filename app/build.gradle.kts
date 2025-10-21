@@ -1,3 +1,5 @@
+import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -15,10 +17,30 @@ android {
         applicationId = "com.xandy.lite"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "1.1.11"
+        versionCode = 23
+        versionName = "1.1.121"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { this.debugSymbolLevel = "SYMBOL_TABLE" }
+        buildConfigField(
+            "String", "PART_ONE", "\"" + gradleLocalProperties(rootDir, providers)
+                .getProperty("PART_ONE", "") + "\""
+        )
+        buildConfigField(
+            "String", "PART_TWO", "\"" + gradleLocalProperties(rootDir, providers)
+                .getProperty("PART_TWO", "") + "\""
+        )
+        buildConfigField(
+            "String", "PART_THREE", "\"" + gradleLocalProperties(rootDir, providers)
+                .getProperty("PART_THREE", "") + "\""
+        )
+        buildConfigField(
+            "String", "PART_FOUR", "\"" + gradleLocalProperties(rootDir, providers)
+                .getProperty("PART_FOUR", "") + "\""
+        )
+        buildConfigField(
+            "String", "PART_FIVE", "\"" + gradleLocalProperties(rootDir, providers)
+                .getProperty("PART_FIVE", "") + "\""
+        )
     }
 
     buildTypes {
@@ -61,6 +83,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     ksp {
         arg("room.schemaLocation", "$projectDir/schemas")

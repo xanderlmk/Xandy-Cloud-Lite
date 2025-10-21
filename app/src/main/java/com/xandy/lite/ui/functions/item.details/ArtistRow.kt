@@ -32,7 +32,7 @@ fun ArtistRow(artist: Artist, getUIStyle: GetUIStyle, onClick: () -> Unit) {
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { onClick() })
             }
-            .border(2.dp, getUIStyle.themedColor(), RoundedCornerShape(2.dp))
+            .border(2.dp, getUIStyle.themedOnContainerColor(), RoundedCornerShape(2.dp))
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start

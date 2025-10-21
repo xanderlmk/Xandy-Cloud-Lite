@@ -11,7 +11,9 @@ class GetUIStyle(
     private val isDynamicTheme: Boolean, private val prefRepository: PrefRepository
 ) {
     suspend fun changeTheme(theme: Theme) = prefRepository.changeTheme(theme)
+    suspend fun toggleOffloadingEnabled(isOn: Boolean) = prefRepository.toggleOffloading(isOn)
     fun getAppTheme() = prefRepository.theme
+    fun getOffloadingEnabled() = prefRepository.offloadingEnabled
     fun getIsDarkTheme() = isDarkTheme
     fun floatingPlayerBackground(): Color =
         if (isDarkTheme) Color(33, 40, 40, 255)
@@ -36,7 +38,7 @@ class GetUIStyle(
         if (isDarkTheme) Color(12, 11, 24, 255)
         else Color(162, 169, 253, 255)
 
-    fun themedColor(): Color = if (isDarkTheme) Color.White else Color.Black
+    fun themedOnContainerColor(): Color = if (isDarkTheme) Color.White else Color.Black
     fun altThemedColor(): Color =
         if (isDarkTheme) Color(183, 116, 201, 255)
         else Color(73, 4, 119, 255)
@@ -60,6 +62,10 @@ class GetUIStyle(
     fun dialogBackGroundColor(): Color =
         if (isDarkTheme) Color(13, 16, 13, 255)
         else Color(179, 252, 201, 255)
+
     fun getColorScheme(): ColorScheme = cS
+
+    fun floatingButtonColor(): Color =
+        if (isDarkTheme) Color(72, 41, 41, 255) else Color(112, 76, 76, 255)
 
 }

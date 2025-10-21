@@ -69,7 +69,7 @@ class UIRepositoryImpl(private val context: Context) : UIRepository {
 
     override fun startAdding(pickedSL: List<AudioFile>) {
         _isSelecting.update { true }; _isAdding.update { true }
-        _selectedSongIds.update { pickedSL.map { it.uri.toString() } }
+        _selectedSongIds.update { pickedSL.map { it.id } }
     }
 
     override fun startSelectingSongs(songId: String) {

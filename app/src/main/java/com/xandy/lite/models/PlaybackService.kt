@@ -18,12 +18,23 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.audio.AudioOffloadSupport
+import androidx.media3.exoplayer.audio.AudioRendererEventListener
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioOffloadSupportProvider
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
+import androidx.media3.exoplayer.audio.MediaCodecAudioRenderer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.ControllerInfo
@@ -38,6 +49,7 @@ import com.xandy.lite.MainActivity
 import com.xandy.lite.SongViewActivity
 import com.xandy.lite.db.XandyDatabase.Companion.getDatabase
 import com.xandy.lite.db.tables.toMediaItems
+import com.xandy.lite.models.application.PrefRepositoryImpl
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.dataStore
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +64,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import java.util.ArrayList
+import java.util.logging.Handler
 
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -85,6 +99,7 @@ class PlaybackService : MediaSessionService() {
         private const val LAST_POSITION = "last_position"
         private val SHUFFLE_ENABLED = booleanPreferencesKey("shuffle_enabled")
         private val REPEAT_MODE = intPreferencesKey("repeat_mode")
+        private val OFFLOADING_ENABLED = booleanPreferencesKey("Offloading.Enabled")
     }
 
     private val prevButton = commandBuilder(
@@ -125,21 +140,27 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         appPrefs = this.applicationContext.getSharedPreferences(PREFERENCES, MODE_PRIVATE)
-
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
-        val isPixel7Pro = Build.MODEL.contains("Pixel 7 Pro", ignoreCase = true)
-        Log.i(XANDY_CLOUD, "Is Pixel phone: $isPixel7Pro")
-        val audioOffloadPreferences =
-            AudioOffloadPreferences.Builder()
-                .setAudioOffloadMode(
-                    if (isPixel7Pro) AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
-                    else AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+        /*val newAudioSink = audioSink(this)
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioRenderers(
+                context: Context, extensionRendererMode: Int,
+                mediaCodecSelector: MediaCodecSelector, enableDecoderFallback: Boolean,
+                audioSink: AudioSink, eventHandler: android.os.Handler,
+                eventListener: AudioRendererEventListener, out: ArrayList<Renderer>
+            ) {
+                out.add(
+                    MediaCodecAudioRenderer(
+                        context, mediaCodecSelector, eventHandler,
+                        eventListener, newAudioSink
+                    )
                 )
-                .setIsGaplessSupportRequired(true)
-                .build()
+            }
+        }*/
+
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 30_000,  // minBufferMs - 50_000 -> 30_000
@@ -148,14 +169,12 @@ class PlaybackService : MediaSessionService() {
                 3_000    // bufferForPlaybackAfterRebufferMs 2_000 -> 3_000
             )
             .build()
-        player = ExoPlayer.Builder(this).setLoadControl(loadControl).build().apply {
-            setAudioAttributes(audioAttributes, true)
-            playWhenReady = true
-            trackSelectionParameters = this.trackSelectionParameters
-                .buildUpon()
-                .setAudioOffloadPreferences(audioOffloadPreferences)
-                .build()
-        }
+        player = ExoPlayer.Builder(this/*, renderersFactory*/)
+            //.setRenderersFactory(renderersFactory)
+            .setLoadControl(loadControl).build().apply {
+                setAudioAttributes(audioAttributes, true)
+                playWhenReady = true
+            }
 
         val forwardingPlayer = object : ForwardingSimpleBasePlayer(player) {
             override fun handleSeek(
@@ -231,8 +250,23 @@ class PlaybackService : MediaSessionService() {
                     newRepeatButton, newShuffleButton
                 )
             )
-            player.repeatMode = repeatMode
-            player.shuffleModeEnabled = shuffleEnabled
+            val offloadingEnabled = setOffloadingEnabled(this@PlaybackService)
+            val audioOffloadPreferences =
+                AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(
+                        if (offloadingEnabled) AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+                        else AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                    )
+                    .setIsGaplessSupportRequired(true)
+                    .build()
+            session.player.repeatMode = repeatMode
+            session.player.shuffleModeEnabled = shuffleEnabled
+            session.player.apply {
+                trackSelectionParameters = this.trackSelectionParameters
+                    .buildUpon()
+                    .setAudioOffloadPreferences(audioOffloadPreferences)
+                    .build()
+            }
         }
     }
 
@@ -268,6 +302,17 @@ class PlaybackService : MediaSessionService() {
         }
         super.onDestroy()
     }
+
+    private fun audioSink(context: Context) = DefaultAudioSink.Builder(context)
+        .setAudioTrackBufferSizeProvider(
+            DefaultAudioTrackBufferSizeProvider.Builder()
+                .setOffloadBufferDurationUs(60_000_000)
+                .setPassthroughBufferDurationUs(350_000)
+                .build()
+        )
+        .setEnableOnAudioPositionAdvancingFix(false)
+        .build()
+
 
     private inner class SessionCallback : MediaSession.Callback {
         override fun onConnect(
@@ -520,6 +565,15 @@ class PlaybackService : MediaSessionService() {
         }.first()
     } catch (e: Exception) {
         Log.e(XANDY_CLOUD, "Failed to get repeat mode: $e")
+        false
+    }
+
+    private suspend fun setOffloadingEnabled(context: Context) = try {
+        context.dataStore.data.map { preferences ->
+            preferences[OFFLOADING_ENABLED] == true
+        }.first()
+    } catch (e: Exception) {
+        Log.e(XANDY_CLOUD, "Failed to get offloading enabled: $e")
         false
     }
 

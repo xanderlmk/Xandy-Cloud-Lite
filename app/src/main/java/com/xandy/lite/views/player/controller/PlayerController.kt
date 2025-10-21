@@ -59,7 +59,6 @@ fun PlayerController(
     val repeatMode by navVM.repeatMode.collectAsStateWithLifecycle()
     val sd by navVM.songDetails.collectAsStateWithLifecycle()
     val ci = ContentIcons(getUIStyle)
-    val details = sd
     if (!tracks.isEmpty && sd != null) {
         Box(
             modifier
@@ -78,7 +77,7 @@ fun PlayerController(
                     .fillMaxHeight()
                     .fillMaxWidth(.625f)
             ) {
-                if (details != null) {
+                sd?.let { details ->
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(details.picture)
@@ -106,7 +105,7 @@ fun PlayerController(
                             modifier = Modifier.padding(start = 4.dp),
                         )
                     }
-                } else {
+                } ?: Box {
                     var show by rememberSaveable { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
                         delay(2_000L); show = true

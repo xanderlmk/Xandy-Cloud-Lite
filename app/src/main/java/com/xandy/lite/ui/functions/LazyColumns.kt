@@ -77,7 +77,7 @@ fun SongLazyColumn(
                 onEdit = { onEdit(af.song.uri.toString()) },
                 onLongPress = { onLongPress(af.song.id) },
                 onToggleHide = { onToggleHide(af.song.uri) },
-                onAdd = { onAdd(af.song.uri.toString()) },
+                onAdd = { onAdd(af.song.id) },
                 onUpsertLyrics = { onUpsertLyrics(af.song.uri.toString()) }
             )
         }

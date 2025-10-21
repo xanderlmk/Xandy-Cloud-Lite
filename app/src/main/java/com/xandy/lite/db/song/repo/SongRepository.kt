@@ -7,6 +7,7 @@ import androidx.media3.session.MediaController
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.BucketWithAudio
 import com.xandy.lite.db.tables.AudioWithPls
+import com.xandy.lite.db.tables.LyricLine
 import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.db.tables.LyricsWithAudio
 import com.xandy.lite.db.tables.Playlist
@@ -164,12 +165,18 @@ interface SongRepository {
     fun toggleAutoUpdate(enabled: Boolean)
     val autoUpdate: StateFlow<Boolean>
 
+    suspend fun getLyrics(): Lyrics?
+
+    suspend fun updatePickedLyrics(n: String)
+
     /** Update artist of the selected song/audio list */
     suspend fun updateArtistOfAL(ids: List<String>, artist: String): UpdateResult
     /** Update album of the selected song/audio list */
     suspend fun updateAlbumOfAL(ids: List<String>, album: String): UpdateResult
     /** Update genre of the selected song/audio list */
     suspend fun updateGenreOfAL(ids: List<String>, genre: String): UpdateResult
+
+    suspend fun importLyrics(lyrics: Lyrics): InsertResult
 
     val idWritingEnabled: Flow<Boolean>
     suspend fun toggleIdWriting(e : Boolean)

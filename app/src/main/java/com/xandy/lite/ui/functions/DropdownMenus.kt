@@ -66,7 +66,7 @@ fun LocalAudioOptions(
                 audioStates.isLoading,
                 percentage = audioStates.percent,
                 onClick = onRefresh,
-                getUIStyle.themedColor()
+                getUIStyle.themedOnContainerColor()
             )
         }
     }

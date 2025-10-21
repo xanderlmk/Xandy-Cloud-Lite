@@ -2,6 +2,7 @@ package com.xandy.lite.models.application
 
 import android.content.Context
 import android.util.Log
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.xandy.lite.models.Theme
@@ -17,6 +18,8 @@ import kotlinx.serialization.json.Json
 interface PrefRepository {
     val theme: StateFlow<Theme>
     suspend fun changeTheme(new: Theme)
+    val offloadingEnabled: StateFlow<Boolean>
+    suspend fun toggleOffloading(enabled: Boolean)
 }
 
 class PrefRepositoryImpl(
@@ -24,11 +27,15 @@ class PrefRepositoryImpl(
 ) : PrefRepository {
     companion object {
         private val THEME = stringPreferencesKey("System.Theme")
+        private val OFFLOADING_ENABLED = booleanPreferencesKey("Offloading.Enabled")
     }
 
     override val theme = context.dataStore.data.map { preferences ->
         preferences[THEME]?.let { Json.decodeFromString(Theme.serializer(), it) } ?: Theme.Default
     }.stateIn(scope = scope, started = SharingStarted.Eagerly, initialValue = Theme.Default)
+    override val offloadingEnabled = context.dataStore.data.map { preferences ->
+        preferences[OFFLOADING_ENABLED] ?: false
+    }.stateIn(scope = scope, started = SharingStarted.Lazily, initialValue = false)
 
     override suspend fun changeTheme(new: Theme) = withContext(Dispatchers.IO) {
         try {
@@ -37,6 +44,17 @@ class PrefRepositoryImpl(
             }
         } catch (e: Exception) {
             Log.w(XANDY_CLOUD, "Failed updating theme: $e")
+            return@withContext
+        }
+    }
+
+    override suspend fun toggleOffloading(enabled: Boolean) = withContext(Dispatchers.IO) {
+        try {
+            context.dataStore.edit { settings ->
+                settings[OFFLOADING_ENABLED] = enabled
+            }
+        } catch (e: Exception) {
+            Log.w(XANDY_CLOUD, "Failed updating offloading enabled: $e")
             return@withContext
         }
     }

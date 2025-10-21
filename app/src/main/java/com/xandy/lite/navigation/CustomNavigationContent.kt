@@ -120,7 +120,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                 ModalDrawerSheet(
                     modifier = Modifier
                         .fillMaxWidth(0.70f),
-                    drawerContentColor = getUIStyle.themedColor()
+                    drawerContentColor = getUIStyle.themedOnContainerColor()
                 ) {
                     modalContent.Home()
                     modalContent.LyricList()
@@ -168,10 +168,10 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                         },
                         colors = TopAppBarColors(
                             containerColor = getUIStyle.topBarColor(),
-                            navigationIconContentColor = getUIStyle.themedColor(),
-                            titleContentColor = getUIStyle.themedColor(),
-                            actionIconContentColor = getUIStyle.themedColor(),
-                            scrolledContainerColor = getUIStyle.themedColor()
+                            navigationIconContentColor = getUIStyle.themedOnContainerColor(),
+                            titleContentColor = getUIStyle.themedOnContainerColor(),
+                            actionIconContentColor = getUIStyle.themedOnContainerColor(),
+                            scrolledContainerColor = getUIStyle.themedOnContainerColor()
                         ),
                         actions = {
                             when (route) {
@@ -469,8 +469,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                         )
                     }
                     content()
-                    val mc = mediaController
-                    if (mc != null) {
+                    mediaController?.let { mc ->
                         if (route.showPlayer()) {
                             PlayerController(
                                 mc, navVM, getUIStyle = getUIStyle,
@@ -480,7 +479,13 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                     .height(60.dp)
                             )
                         }
-                    } else {
+                    } ?: Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .height(60.dp)
+                            .clickable { getController() },
+                        contentAlignment = Alignment.Center
+                    ) {
                         var show by rememberSaveable { mutableStateOf(false) }
                         LaunchedEffect(Unit) {
                             delay(1_500L); show = true

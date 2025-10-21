@@ -13,6 +13,7 @@ import com.xandy.lite.controllers.view.models.LocalFolderVM
 import com.xandy.lite.controllers.view.models.LocalGenreVM
 import com.xandy.lite.controllers.view.models.LocalMediaVM
 import com.xandy.lite.controllers.view.models.LocalPLVM
+import com.xandy.lite.controllers.view.models.LyricsEditorVM
 import com.xandy.lite.controllers.view.models.LyricsVM
 import com.xandy.lite.controllers.view.models.PickedSongVM
 import com.xandy.lite.navigation.NavViewModel
@@ -70,6 +71,7 @@ object AppVMProvider {
             EditAudioVM(xandyCloudApplication().container.songRepository)
         }
         initializer { LyricsVM(xandyCloudApplication().container.songRepository) }
+        initializer { LyricsEditorVM(xandyCloudApplication().container.songRepository) }
     }
 }
 

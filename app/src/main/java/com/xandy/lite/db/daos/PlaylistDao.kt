@@ -80,23 +80,22 @@ interface PlaylistDao {
     suspend fun getIdsFromUris(uris: List<String>): List<AudioSongId>
 
     @Transaction
-    suspend fun addSongsToPl(songUris: List<String>, playlistId: String) {
+    suspend fun addSongsToPl(songIds: List<String>, playlistId: String) {
         val n = getPlaylistNameById(playlistId)
-        val songIds = getIdsFromUris(songUris)
+
         songIds.forEach {
             addSongToPlaylist(
-                PLSongCrossRef(songId = it.id, playlistId = n.name)
+                PLSongCrossRef(songId = it, playlistId = n.name)
             )
         }
     }
     @Transaction
-    suspend fun addPlWithSongs(songUris: List<String>, pl: Playlist) {
+    suspend fun addPlWithSongs(songIds: List<String>, pl: Playlist) {
         insertPlaylist(pl)
         insertPLOrderBy(PlaylistSongOrder(pl.name))
-        val songIds = getIdsFromUris(songUris)
         songIds.forEach {
             addSongToPlaylist(
-                PLSongCrossRef(songId = it.id, playlistId = pl.name)
+                PLSongCrossRef(songId = it, playlistId = pl.name)
             )
         }
     }

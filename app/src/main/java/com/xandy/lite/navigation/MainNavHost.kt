@@ -13,6 +13,10 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,7 +59,7 @@ import com.xandy.lite.views.LocalFolderView
 import com.xandy.lite.views.LocalGenreView
 import com.xandy.lite.views.LocalMusicView
 import com.xandy.lite.views.LocalPlaylistView
-import com.xandy.lite.views.LyricsListView
+import com.xandy.lite.views.lyrics.LyricsListView
 import com.xandy.lite.views.edit.audio.EditAudioView
 import com.xandy.lite.views.picked.song.SongView
 import com.xandy.lite.views.settings.SettingsView
@@ -115,7 +120,29 @@ fun MainNavHost(
     }
     content.CustomNavigationTabBars(mainNavController, navVM, getController) {
         NavHost(navController = mainNavController, startDestination = LocalMusicDestination.route) {
-            composable(PickedSongDestination.route) {
+            composable(
+                route = PickedSongDestination.route,
+                enterTransition = {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                        animationSpec = SpringSpec(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow,
+                            visibilityThreshold = IntOffset.VisibilityThreshold
+                        )
+                    )
+                },
+                exitTransition = {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                        animationSpec = SpringSpec(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow,
+                            visibilityThreshold = IntOffset.VisibilityThreshold
+                        )
+                    )
+                }
+            ) {
                 val songVM: PickedSongVM = viewModel(factory = AppVMProvider.Factory)
                 var songToggle by rememberSaveable { mutableStateOf<SongToggle>(SongToggle.Details) }
                 BackHandler {
@@ -126,7 +153,7 @@ fun MainNavHost(
                         onSpecialPopBack()
                     }
                 }
-                SongView(songVM, getUIStyle, onToggle = { songToggle = it }, songToggle)
+                SongView(songVM, getUIStyle,{ songToggle = it }, songToggle)
             }
 
             composable(LocalMusicDestination.route) {

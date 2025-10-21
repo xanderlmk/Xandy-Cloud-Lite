@@ -158,7 +158,7 @@ fun combineMCWithPickedSong(
     if (mediaMetadata == null && a == null) null
     else {
         val sd = combineSongWithMediaMetadata(a, mediaMetadata, unknownTrackUri, id)
-        Log.i("Xandy-Cloud", "$sd")
+        //Log.i("Xandy-Cloud", "$sd")
         sd
     }
 }.flowOn(Dispatchers.Main.limitedParallelism(1, "Song Details"))
@@ -170,7 +170,7 @@ private fun combineSongWithMediaMetadata(
     val artist = af?.song?.artist ?: item?.artist ?: "Unknown Artist"
     val album = af?.song?.album ?: item?.albumTitle
     val artwork = af?.song?.picture ?: item?.artworkUri ?: unknownTrackUri
-    Log.i(XANDY_CLOUD, "${af?.lyrics}")
+   // Log.i(XANDY_CLOUD, "${af?.lyrics}")
 
     return SongDetails(
         id, title.toString(), artist.toString(), album?.toString(), artwork, af?.lyrics

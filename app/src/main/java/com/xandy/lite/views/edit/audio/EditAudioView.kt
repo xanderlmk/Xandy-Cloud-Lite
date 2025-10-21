@@ -266,7 +266,7 @@ fun DateChooser(
                 )
             },
             tint = if (selectedYear == null) getUIStyle.disabledThemedColor()
-            else getUIStyle.themedColor(),
+            else getUIStyle.themedOnContainerColor(),
             enabled = selectedYear != null,
             modifier = Modifier.weight(1f)
         )
@@ -278,7 +278,7 @@ fun DateChooser(
         SimpleDropdown(
             label = "Day",
             tint = if (dayOptions.isEmpty()) getUIStyle.disabledThemedColor()
-            else getUIStyle.themedColor(),
+            else getUIStyle.themedOnContainerColor(),
             enabled = dayOptions.isNotEmpty(),
             options = dayOptions,
             selectedIndex = selectedDay ?: 0,
@@ -358,15 +358,6 @@ fun LyricsOptions(
             IconButton(onClick = { expanded = !expanded }) { ci.ContentIcon(icon) }
         }
         if (expanded) {
-            Text(text = "Translation for Lyrics", textDecoration = TextDecoration.Underline)
-            TextField(
-                value = lyrics.translation ?: "",
-                placeholder = { Text("Type or paste translation here") },
-                onValueChange = { onLyricsChange(lyrics.copy(translation = it)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            )
             Text(text = "Synchronized Lyrics", textDecoration = TextDecoration.Underline)
             if (set.isEmpty()) Button(onClick = {
                 editAudioVM.addToSet(0, durationMs)

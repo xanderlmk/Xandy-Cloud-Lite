@@ -14,18 +14,18 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
+@Serializable
+@SerialName("$XANDY_CLOUD.Full.Lyrics")
 @Parcelize
-@Entity(
-    tableName = "lyrics"
-)
+@Entity(tableName = "lyrics")
 data class Lyrics(
     @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
     val plain: String,
     @ColumnInfo(defaultValue = "NULL")
-    val translation: String? = null,
+    val translation: TranslatedLyrics? = null,
     @ColumnInfo(defaultValue = "NULL")
-    val pronunciation: String? = null,
+    val pronunciation: TranslatedLyrics? = null,
     @ColumnInfo(defaultValue = "NULL")
     val scroll: Set<LyricLine>? = null,
     @ColumnInfo(defaultValue = "NULL")
@@ -54,9 +54,23 @@ data class LyricLine(
         override fun create(parcel: Parcel): LyricLine = LyricLine(parcel)
     }
 }
-/** TODO()
+
+@Serializable
+@SerialName("$XANDY_CLOUD.Translated.Lyrics")
 @Parcelize
-data class TranslatedLyrics(
-val text: String, val language: String
-): Parcelable
- */
+data class TranslatedLyrics(val lyrics: TranslatedText, val language: String) : Parcelable
+
+@Serializable
+@SerialName("$XANDY_CLOUD.Translated.Interface")
+@Parcelize
+sealed class TranslatedText : Parcelable {
+    @Serializable
+    @SerialName("$XANDY_CLOUD.Translated.Interface.Plain")
+    @Parcelize
+    data class Plain(val t: String) : TranslatedText(), Parcelable
+
+    @Serializable
+    @SerialName("$XANDY_CLOUD.Translated.Interface.Scroll")
+    @Parcelize
+    data class Scroll(val set: Set<LyricLine>) : TranslatedText(), Parcelable
+}
