@@ -26,7 +26,8 @@ import androidx.compose.ui.zIndex
 import androidx.navigation.NavHostController
 import com.xandy.lite.R
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
+import com.xandy.lite.views.lyrics.LyricIndex
 
 class ModalContent(
     private val navController: NavHostController,
@@ -35,6 +36,7 @@ class ModalContent(
 ) {
     private val onNavigate: (String) -> Unit = {
         if (cr != it) {
+            navVM.updateIndexListener(LyricIndex.UNAVAILABLE)
             navVM.updateRoute(it)
             navController.navigate(it)
             onClose()

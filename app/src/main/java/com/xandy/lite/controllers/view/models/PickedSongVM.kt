@@ -11,6 +11,7 @@ import com.xandy.lite.controllers.getQueueOrderedBy
 import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.models.ui.AudioUIState
 import com.xandy.lite.models.ui.order.by.OrderQueueBy
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -58,11 +59,7 @@ class PickedSongVM(private val songRepository: SongRepository) : ViewModel() {
         initialValue = AudioUIState()
     )
 
-    fun updateMediaController(mc: MediaController) {
-        viewModelScope.launch {
-            songRepository.updateMediaController(mc)
-        }
-    }
+    fun updateMediaController(mc: MediaController) = songRepository.updateMediaController(mc)
 
     fun resetMediaController() = songRepository.resetMediaController()
 
@@ -81,6 +78,9 @@ class PickedSongVM(private val songRepository: SongRepository) : ViewModel() {
     fun updateDuration(duration: Long) = songRepository.updateDuration(duration)
     fun updatePosition(position: Long) = songRepository.updatePosition(position)
 
+    fun updateLastestPlayerInfo() = songRepository.updateLastestPlayerInfo()
+
+    /** Start Checking the position of the song */
     fun checkPosition() = songRepository.checkPlaybackPosition()
     fun updateQueueOrder(orderQueueBy: OrderQueueBy) = songRepository.updateQueueOrder(orderQueueBy)
 

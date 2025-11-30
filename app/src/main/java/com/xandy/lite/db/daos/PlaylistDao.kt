@@ -19,11 +19,11 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface PlaylistDao {
     @Transaction
-    @Query("""SELECT * FROM local_playlist ORDER BY playlist_id ASC""")
+    @Query("""SELECT * FROM local_playlist ORDER BY playlist_id COLLATE NOCASE ASC""")
     fun getFlowOfPlsWithSongsByNameASC(): Flow<List<LocalPlsWithAudio>>
 
     @Transaction
-    @Query("""SELECT * FROM local_playlist ORDER BY playlist_id DESC""")
+    @Query("""SELECT * FROM local_playlist ORDER BY playlist_id COLLATE NOCASE DESC""")
     fun getFlowOfPlsWithSongsByNameDESC(): Flow<List<LocalPlsWithAudio>>
 
     @Transaction

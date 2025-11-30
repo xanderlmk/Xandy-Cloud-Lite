@@ -9,17 +9,22 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -60,17 +65,18 @@ import com.xandy.lite.ui.functions.LocalAudioOptions
 import com.xandy.lite.ui.functions.PlayListOptions
 import com.xandy.lite.ui.functions.SearchTextField
 import com.xandy.lite.ui.functions.UpdateAudioListMetadata
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
+import com.xandy.lite.views.lyrics.LyricIndex
 import com.xandy.lite.views.player.controller.PlayerController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class CustomNavigationContent(val getUIStyle: GetUIStyle) {
+
+class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: NavViewModel) {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun CustomNavigationTabBars(
-        mainNavController: NavHostController,
-        navVM: NavViewModel, getController: () -> Unit,
+        mainNavController: NavHostController, getController: () -> Unit,
         content: @Composable () -> Unit
     ) {
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -85,6 +91,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
         val ci = ContentIcons(getUIStyle)
         val onNavigate: (String) -> Unit = { r ->
             if (route != r) {
+                navVM.updateIndexListener(LyricIndex.UNAVAILABLE)
                 if (isSelecting && r != AddToPlDestination.route) navVM.endSelect()
                 if (isSearching) navVM.resetSearch()
                 mainNavController.navigate(r)
@@ -113,8 +120,13 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
         val modalContent = ModalContent(mainNavController, getUIStyle, navVM, route) {
             coroutineScope.launch { drawerState.close() }
         }
+        val toast = XCToast(context)
 
         ModalNavigationDrawer(
+            gesturesEnabled = route != PickedSongDestination.route &&
+                    route != LocalPlDestination.route &&
+                    route != EditAudioDestination.route &&
+                    route != AddToPlDestination.route,
             drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet(
@@ -164,6 +176,29 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                     onTurnOff = { navVM.turnOffSearch() },
                                     ci = ci
                                 )
+                            } else if (route == LyricsEditorDestination.route) {
+                                val idx by navVM.lyricEditorIdx.collectAsStateWithLifecycle()
+                                if (idx >= LyricIndex.AVAILABLE) {
+                                    Row(
+                                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                                    ) {
+                                        LyricFilterChip(
+                                            idx, LyricIndex.DESCRIPTION, "Description"
+                                        )
+                                        LyricFilterChip(
+                                            idx, LyricIndex.PLAIN, "Plain"
+                                        )
+                                        LyricFilterChip(
+                                            idx, LyricIndex.SYNCRYONIZED, "Syncryonized"
+                                        )
+                                        LyricFilterChip(
+                                            idx, LyricIndex.PRONUNCIATION, "Pronunciation"
+                                        )
+                                        LyricFilterChip(
+                                            idx, LyricIndex.TRANSLATION, "Translation"
+                                        )
+                                    }
+                                }
                             }
                         },
                         colors = TopAppBarColors(
@@ -183,9 +218,8 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                             coroutineScope.launch {
                                                 onDelete(
                                                     enabled, context, navVM = navVM,
-                                                    onToggle = { enabled = it },
-
-                                                )
+                                                    onToggle = { enabled = it }
+                                                    )
                                             }
                                         }, onDismissRequest = { showModal = false },
                                         onDelete = {
@@ -253,7 +287,13 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                             onUpdateMetadata = {
                                                 showMetadataDialog = Pair(true, it)
                                             },
-                                            onSelectAll = { navVM.selectAllSongs() },
+                                            onSelectAll = {
+                                                navVM.selectAllSongs {
+                                                    toast.makeMessage(
+                                                        "Cannot select more than 2000 files."
+                                                    )
+                                                }
+                                            },
                                             onDeleteSongs = { showModal = true }
                                         )
                                     }
@@ -268,12 +308,26 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                     )
                                 }
 
+                                PickedSongDestination.route -> {
+
+                                }
+
                             }
                         },
                         navigationIcon = {
                             if (route == LocalMusicDestination.route && !isSearching) {
                                 if (localTab == LocalMusicTabs.PLAYLIST)
-                                    AddIconButton(ci) { showAddPlDialog = true }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceEvenly
+                                    ) {
+                                        IconButton(
+                                            onClick = {
+                                                coroutineScope.launch { drawerState.open() }
+                                            }
+                                        ) { ci.ContentIcon(Icons.Filled.Menu) }
+                                        AddIconButton(ci) { showAddPlDialog = true }
+                                    }
                                 else if (localTab == LocalMusicTabs.LIBRARY && isSelecting)
                                     IconButton(onClick = { navVM.endSelect() }) {
                                         ci.ContentIcon(Icons.Default.Close)
@@ -296,6 +350,15 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                 }) {
                                     ci.ContentIcon(Icons.Default.KeyboardArrowDown)
                                 }
+                            } else if (route == EditAudioDestination.route) {
+                                IconButton(onClick = {
+                                    val route =
+                                        mainNavController.previousBackStackEntry?.destination?.route
+                                    route?.let { navVM.updateRoute(it) }
+                                    mainNavController.popBackStack()
+                                }) {
+                                    ci.ContentIcon(Icons.Default.Close)
+                                }
                             } else if (
                                 route == LocalPlDestination.route && !isSearching && !isSelecting
                             ) {
@@ -311,10 +374,14 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
                                 }) {
                                     ci.ContentIcon(Icons.Default.KeyboardArrowDown)
                                 }
-                            } else if (route == SettingsDestination.route) IconButton(
-                                onClick = { coroutineScope.launch { drawerState.open() } }
-                            ) { ci.ContentIcon(Icons.Filled.Menu) }
-                            else if (route == LyricsListDestination.route) IconButton(
+                            } else if (route == SettingsDestination.route ||
+                                route == LyricsListDestination.route ||
+                                route == LyricsEditorDestination.route ||
+                                route == LocalAlbumDestination.route ||
+                                route == LocalBucketDestination.route ||
+                                route == LocalArtistDestination.route ||
+                                route == LocalGenreDestination.route
+                            ) IconButton(
                                 onClick = { coroutineScope.launch { drawerState.open() } }
                             ) { ci.ContentIcon(Icons.Filled.Menu) }
                         }
@@ -503,6 +570,15 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle) {
             }
         }
     }
+
+    @Composable
+    private fun LyricFilterChip(idx: Int, lyricIndex: Int, text: String) {
+        FilterChip(
+            selected = idx == lyricIndex,
+            onClick = { navVM.updateIndexListener(lyricIndex) },
+            label = { Text(text) }, modifier = Modifier.padding(horizontal = 2.dp)
+        )
+    }
 }
 
 private fun requestWritePermission(
@@ -588,4 +664,4 @@ private suspend fun onTryDelete(
 private fun String.showPlayer() =
     this != PickedSongDestination.route && this != EditAudioDestination.route
             && this != AddToPlDestination.route && this != SettingsDestination.route &&
-            this != LyricsListDestination.route
+            this != LyricsListDestination.route && this != LyricsEditorDestination.route

@@ -4,9 +4,12 @@ import android.os.Bundle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.session.SessionCommand
+import com.xandy.lite.controllers.Controller
 import com.xandy.lite.controllers.setQueue
+import com.xandy.lite.db.lyrics.repo.LyricsRepository
 import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.models.ui.MediaItemWithCreatedOn
 import com.xandy.lite.navigation.UIRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -14,7 +17,9 @@ import kotlinx.coroutines.launch
 
 
 class LocalFolderVM(
-    private val songRepository: SongRepository, private val uiRepository: UIRepository
+    private val songRepository: SongRepository,
+    private val lyricsRepository: LyricsRepository,
+    private val uiRepository: UIRepository
 ) : ViewModel() {
     companion object {
         private const val COMMAND_SHUFFLE = "Shuffle_Songs"
@@ -33,6 +38,13 @@ class LocalFolderVM(
     val pickedQueueName = songRepository.pickedQueueName.stateIn(
         scope = viewModelScope, started = SharingStarted.WhileSubscribed(4_000L), initialValue = ""
     )
+    val unsortedQueue = songRepository.unsortedQueue.stateIn(
+        scope = viewModelScope, started = SharingStarted.Eagerly, emptyList()
+    )
+    fun addToQueue(list: List<AudioFile>): Boolean =
+        Controller.addToQueue(mediaController.value, list, unsortedQueue.value) {
+            viewModelScope.launch { songRepository.addToQueue(it) }
+        }
 
     fun startSelecting(songId: String) = uiRepository.startSelectingSongs(songId)
 
@@ -54,10 +66,11 @@ class LocalFolderVM(
                 )
             selectSong(song, list, albumName)
         }
-    val lyricsList = songRepository.lyricsFlow().stateIn(
+    val lyricsList = lyricsRepository.lyricsFlow().stateIn(
         scope = viewModelScope, started = SharingStarted.Lazily,
         initialValue = emptyList()
     )
+
     suspend fun updateSongLyrics(lyricsId:String, songUri: String) =
-        songRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
+        lyricsRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
 }

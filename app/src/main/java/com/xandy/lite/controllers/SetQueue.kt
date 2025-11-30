@@ -8,6 +8,7 @@ import com.xandy.lite.db.tables.toMediaItemWithCreatedOn
 import com.xandy.lite.db.tables.toMediaItems
 import com.xandy.lite.db.tables.toMediaItemsWithCreatedOn
 import com.xandy.lite.models.ui.MediaItemWithCreatedOn
+import  androidx.media3.common.Player
 
 /** Set the Queue
  * @param list list of AudioFiles
@@ -44,16 +45,9 @@ fun setQueue(
     onSetQueue(list)
 }
 
-fun setInitialQueue(
-    ctrl: MediaController, list: List<MediaItem>, index: Int
-) {
-    val beforeSongs = list.subList(0, index)
-    val afterSongs =
-        if (index == list.lastIndex) emptyList() else list.subList(index + 1, list.size)
+fun setInitialQueue(ctrl: Player, list: List<MediaItem>, index: Int, startPosition: Long) {
     ctrl.clearMediaItems()
-    ctrl.addMediaItems(beforeSongs)
-    ctrl.addMediaItem(list[index])
-    ctrl.addMediaItems(afterSongs)
+    ctrl.setMediaItems(list, index, startPosition)
     ctrl.prepare()
     ctrl.pause()
 }

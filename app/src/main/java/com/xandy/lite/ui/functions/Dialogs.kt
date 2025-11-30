@@ -4,6 +4,8 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.xandy.lite.db.tables.LyricsWithAudio
 import com.xandy.lite.ui.functions.item.details.LyricsRow
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 
 @Composable
@@ -198,7 +200,9 @@ fun LyricsListDialog(
 
 @Composable
 fun ExportLyricDialog(
-    onDismiss: () -> Unit, onSubmit: (String?) -> Unit, getUIStyle: GetUIStyle, enabled: Boolean
+    onDismiss: () -> Unit, onSubmit: (String?) -> Unit, submitButtonText: () -> String,
+    exists: () -> Boolean, getUIStyle: GetUIStyle, enabled: Boolean,
+    onCreateNew: (String?) -> Unit, onReplace: (String?) -> Unit,
 ) {
     var fileName by rememberSaveable { mutableStateOf("") }
     AlertDialog(
@@ -207,19 +211,33 @@ fun ExportLyricDialog(
             Text("Export lyrics?")
         }, confirmButton = {
             Button(
-                onClick = { onSubmit(fileName.takeIf { it.isNotBlank() }) }, enabled = enabled
-            ) { Text("Export") }
+                onClick = {
+                    if (!exists()) onSubmit(fileName.takeIf { it.isNotBlank() })
+                    else onCreateNew(fileName.takeIf { it.isNotBlank() })
+                }, enabled = enabled && filenameRegex.matches(fileName)
+            ) { Text(submitButtonText()) }
         },
         dismissButton = {
-            Button(onClick = onDismiss, enabled = enabled) { Text("Cancel") }
+            if (!exists()) Button(onClick = onDismiss, enabled = enabled) { Text("Cancel") }
+            else Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(onClick = onDismiss, enabled = enabled) { Text("Cancel") }
+                Spacer(Modifier.padding(horizontal = 4.dp))
+                Button(
+                    onClick = { onReplace(fileName.takeIf { it.isNotBlank() }) }, enabled = enabled
+                ) { Text("Replace") }
+
+            }
         }, text = {
-            TextField(
+            if(!exists()) TextField(
                 value = fileName,
                 onValueChange = { fileName = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 suffix = { Text(".xclf") }
-            )
+            ) else Text("Lyrics already exists, please select an option")
         },
         titleContentColor = getUIStyle.themedOnContainerColor(),
         textContentColor = getUIStyle.themedOnContainerColor(),
@@ -227,9 +245,15 @@ fun ExportLyricDialog(
     )
 }
 
+private val filenameRegex = Regex(
+    "(?i)^(?!^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$)" +  // not a reserved name (with optional extension)
+            "[^<>:\"/\\\\|?*\\u0000-\\u001F]+" +                         // no forbidden chars or control chars
+            "(?<![ .])$"                                                 // does not end with space or dot
+)
+
 @Composable
 fun OverwriteItem(
-    onDismiss: () -> Unit, onSubmit: () -> Unit, title: String,  confirmButtonText: String,
+    onDismiss: () -> Unit, onSubmit: () -> Unit, title: String, confirmButtonText: String,
     text: String, getUIStyle: GetUIStyle, enabled: Boolean
 ) {
     AlertDialog(
@@ -244,6 +268,31 @@ fun OverwriteItem(
             Button(onClick = onDismiss, enabled = enabled) { Text("Cancel") }
         },
         text = { Text(text = text, modifier = Modifier.fillMaxWidth()) },
+        titleContentColor = getUIStyle.themedOnContainerColor(),
+        textContentColor = getUIStyle.themedOnContainerColor(),
+        containerColor = getUIStyle.dialogBackGroundColor()
+    )
+}
+
+@Composable
+fun RestartPlayer(onDismiss: () -> Unit, onSubmit: () -> Unit, getUIStyle: GetUIStyle) {
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        title = { Text("Attention") },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit() }
+            ) { Text("Restart") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) { Text("Later") }
+        },
+        text = {
+            Text(
+                text = "Audio pipeline settings have changed. Restart playback now?",
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
         titleContentColor = getUIStyle.themedOnContainerColor(),
         textContentColor = getUIStyle.themedOnContainerColor(),
         containerColor = getUIStyle.dialogBackGroundColor()

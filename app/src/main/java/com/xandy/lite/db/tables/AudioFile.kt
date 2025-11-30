@@ -22,6 +22,7 @@ import java.util.UUID
 
 
 private const val SONG_ID = "song_id"
+private const val FILE_ID = "file_id"
 
 /**
  * Local Audio File
@@ -72,20 +73,25 @@ private const val SONG_ID = "song_id"
     indices = [
         Index(value = ["volume_name", "bucket_id"], name = "bucket_reference_index"),
         Index(value = ["lyrics_id"], name = "lyrics_reference_index"),
-        Index(value = ["uri"], name = "uri_index", unique = true)
+        Index(value = ["uri"], name = "uri_index", unique = true),
+        Index(value = [FILE_ID], name = "file_id_index")
     ]
 )
 data class AudioFile(
     @PrimaryKey
     @ColumnInfo(name = SONG_ID)
     val id: String = UUID.randomUUID().toString(),
+    @ColumnInfo(name = FILE_ID)
+    val fileId: Long,
     @Serializable(with = UriAsString::class)
     val uri: Uri,
+    @ColumnInfo(name = "display_name")
     val displayName: String,
     val title: String,
     val artist: String,
     val album: String?,
     val genre: String?,
+    @ColumnInfo(name = "duration_millis")
     val durationMillis: Long,
     @ColumnInfo(defaultValue = "NULL")
     val year: Int? = null,
@@ -96,10 +102,14 @@ data class AudioFile(
     @Serializable(with = UriAsString::class)
     val picture: Uri,
     @Serializable(with = DateAsLong::class)
+    @ColumnInfo(name = "created_on")
     val createdOn: Date,
+    @Serializable(with = DateAsLong::class)
+    @ColumnInfo(name = "date_modified")
+    val dateModified: Date,
     @ColumnInfo(defaultValue = "false")
     val hidden: Boolean = false,
-    @ColumnInfo(defaultValue = "false")
+    @ColumnInfo(name = "permanently_hidden", defaultValue = "false")
     val permanentlyHidden: Boolean = false,
     @ColumnInfo(name = "lyrics_id", defaultValue = "NULL")
     val lyricsId: String? = null,
@@ -114,8 +124,10 @@ fun List<AudioFile>.toMediaItems() = map { song -> song.toMediaItem() }
 fun AudioFile.toBundle(): Bundle {
     val bundle = Bundle()
     bundle.putString("uri", this.uri.toString())
+    bundle.putLong(FILE_ID, this.fileId)
     return bundle
 }
+
 fun AudioFile.toMediaItem() = MediaItem.Builder()
     .setMediaId(this.id)
     .setUri(this.uri)
@@ -132,6 +144,7 @@ fun AudioFile.toMediaItem() = MediaItem.Builder()
             .build()
     )
     .build()
+
 fun AudioFile.toMediaItemWithCreatedOn() =
     MediaItemWithCreatedOn(this.toMediaItem(), this.createdOn)
 
@@ -162,11 +175,12 @@ fun AudioFile.datedString() = when {
 fun AudioFile.isNotInternal() = !this.uri.toString().startsWith("content://media/internal")
 
 fun MediaItem.toAudioFile(unknownTrackUri: Uri) = AudioFile(
-    id = this.itemKey() , uri = this.uri(), title = this.title(), artist = this.artist(),
+    id = this.itemKey(), uri = this.uri(), title = this.title(), artist = this.artist(),
     album = this.album(), durationMillis = this.mediaMetadata.durationMs ?: 0L,
     displayName = displayTitle(), picture = this.artwork() ?: unknownTrackUri,
     genre = this.genre(), createdOn = Date(),
-    year = this.year(), day = this.day(), month = this.month()
+    year = this.year(), day = this.day(), month = this.month(), fileId = this.longId(),
+    dateModified = Date()
 )
 
 private const val UNKNOWN = "Unknown Title"
@@ -180,3 +194,20 @@ private fun MediaItem.displayTitle() = this.mediaMetadata.displayTitle?.toString
 private fun MediaItem.year() = this.mediaMetadata.releaseYear
 private fun MediaItem.day() = this.mediaMetadata.releaseDay
 private fun MediaItem.month() = this.mediaMetadata.releaseMonth
+private fun MediaItem.longId() = this.mediaMetadata.extras?.getLong(FILE_ID) ?: 0
+
+fun MediaItem.updateMetadata(updated: AudioFile): MediaItem {
+    val newMetadata = this.mediaMetadata.buildUpon()
+        .setTitle(updated.title)
+        .setArtist(updated.artist)
+        .setGenre(updated.genre)
+        .setArtworkUri(updated.picture)
+        .setReleaseYear(updated.year)
+        .setReleaseMonth(updated.month)
+        .setReleaseDay(updated.day)
+        .setExtras(updated.toBundle())
+        .build()
+    return this.buildUpon()
+        .setMediaMetadata(newMetadata)
+        .build()
+}

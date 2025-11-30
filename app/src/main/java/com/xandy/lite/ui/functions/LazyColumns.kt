@@ -15,17 +15,18 @@ import androidx.compose.ui.unit.dp
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.AudioWithPls
 import com.xandy.lite.ui.functions.item.details.SongRow
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 
 @Composable
 fun SongLazyColumn(
     list: List<AudioFile>, enabled: Boolean, onClick: (AudioFile) -> Unit, getUIStyle: GetUIStyle,
     onEdit: (String) -> Unit, onDelete: (AudioFile) -> Unit, onLongPress: (String) -> Unit,
-    onAdd: (String) -> Unit, onToggleHide: (Uri) -> Unit = {}, selectedSongSet: Set<String>,
-    hideAllowed: Pair<Boolean, String> = Pair(false, ""),onUpsertLyrics: (String) -> Unit,
-    topContent: LazyListScope.() -> Unit = {}, state: LazyListState = rememberLazyListState(),
-    currentId: String, isSelecting: Boolean, modifier: Modifier
+    onAdd: (String) -> Unit, onEnqueue: (AudioFile) -> Unit, onToggleHide: (Uri) -> Unit = {},
+    selectedSongSet: Set<String>, hideAllowed: Pair<Boolean, String> = Pair(false, ""),
+    onUpsertLyrics: (String) -> Unit, topContent: LazyListScope.() -> Unit = {},
+    state: LazyListState = rememberLazyListState(), currentId: String, isSelecting: Boolean,
+    modifier: Modifier
 ) {
     LazyColumn(
         modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, state = state
@@ -39,11 +40,12 @@ fun SongLazyColumn(
                 context = LocalContext.current, isPickedSong = isPicked,
                 onClick = { onClick(audio) },
                 onEdit = { onEdit(audio.uri.toString()) },
+                onEnqueue = {onEnqueue(audio)},
                 onDelete = { onDelete(audio) },
                 onLongPress = { onLongPress(audio.id) },
                 onToggleHide = { onToggleHide(audio.uri) },
                 isSelecting = isSelecting, hideAllowed = hideAllowed,
-                onAdd = { onAdd(audio.uri.toString()) },
+                onAdd = { onAdd(audio.id) },
                 onUpsertLyrics = { onUpsertLyrics(audio.uri.toString()) }
             )
         }
@@ -57,7 +59,7 @@ fun SongLazyColumn(
     onEdit: (String) -> Unit, onDelete: (AudioFile) -> Unit, onUpsertLyrics: (String) -> Unit,
     onLongPress: (String) -> Unit, hideAllowed: Pair<Boolean, String> = Pair(false, ""),
     selectedSongSet: Set<String>, contentPadding: PaddingValues = PaddingValues(0.dp),
-    currentId: String,
+    onEnqueue: (AudioFile) -> Unit, currentId: String,
     state: LazyListState = rememberLazyListState(), isSelecting: Boolean, modifier: Modifier
 ) {
     LazyColumn(
@@ -75,6 +77,7 @@ fun SongLazyColumn(
                 onClick = { onClick(af.song) },
                 onDelete = { onDelete(af.song) },
                 onEdit = { onEdit(af.song.uri.toString()) },
+                onEnqueue = {onEnqueue(af.song)},
                 onLongPress = { onLongPress(af.song.id) },
                 onToggleHide = { onToggleHide(af.song.uri) },
                 onAdd = { onAdd(af.song.id) },

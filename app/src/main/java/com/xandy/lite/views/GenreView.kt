@@ -21,12 +21,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xandy.lite.controllers.view.models.LocalGenreVM
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.models.XCToast
 import com.xandy.lite.models.ui.Genre
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.LyricsListDialog
 import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.PlayOptions
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import kotlinx.coroutines.launch
 import my.nanihadesuka.compose.LazyColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
@@ -65,6 +66,7 @@ fun LocalGenreView(
     val lyricsList by vm.lyricsList.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val toast = XCToast(context)
 
     LazyColumnScrollbar(
         state = state,
@@ -77,11 +79,15 @@ fun LocalGenreView(
     ) {
         SongLazyColumn(
             list = filtered, enabled = enabled, getUIStyle = getUIStyle,
-            isSelecting = isSelecting,currentId = currentId,
+            isSelecting = isSelecting, currentId = currentId,
             onClick = { audio ->
                 if (!isSelecting) {
                     vm.selectSong(audio, genre.songs, name)
                 } else vm.toggleSong(audio.uri.toString())
+            },
+            onEnqueue = {
+                val result = vm.addToQueue(listOf(it))
+                if (result) toast.makeMessage("Song already in queue")
             },
             onEdit = onEdit, onAdd = onAdd, state = state,
             onLongPress = {

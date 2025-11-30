@@ -33,7 +33,7 @@ import coil.request.ImageRequest
 import com.xandy.lite.R
 import com.xandy.lite.models.ui.Album
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 @Composable
 fun AlbumBox(album: Album, getUIStyle: GetUIStyle, onClick: () -> Unit) {

@@ -36,16 +36,14 @@ import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.LyricLine
 import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 @Composable
 fun VerticalEditAudioView(
     audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean, lyrics: Lyrics,
     onLyricsChange: (Lyrics) -> Unit, onUpdate: (AudioFile, Lyrics?) -> Unit,
-    allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle, set: List<LyricLine>,
-    editAudioVM: EditAudioVM
+    allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle
 ) {
-    val ci = ContentIcons(getUIStyle)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -127,9 +125,7 @@ fun VerticalEditAudioView(
                 onAudioChange(audio.copy(picture = picture))
             }
         }
-        LyricsOptions(ci, lyrics, audio.durationMillis, set, editAudioVM) {
-            onLyricsChange(it)
-        }
+        LyricsOptions( lyrics) { onLyricsChange(it) }
         Spacer(Modifier.padding(vertical = 10.dp))
         HorizontalDivider(Modifier.fillMaxWidth())
         Button(

@@ -14,9 +14,13 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -34,6 +39,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -45,13 +51,16 @@ import com.xandy.lite.controllers.view.models.LocalFolderVM
 import com.xandy.lite.controllers.view.models.LocalGenreVM
 import com.xandy.lite.controllers.view.models.LocalMediaVM
 import com.xandy.lite.controllers.view.models.LocalPLVM
+import com.xandy.lite.controllers.view.models.LyricsEditorVM
 import com.xandy.lite.controllers.view.models.PickedSongVM
 import com.xandy.lite.models.application.AppVMProvider
+import com.xandy.lite.models.application.PreferencesManager
 import com.xandy.lite.models.ui.DeleteResult
 import com.xandy.lite.models.ui.InsertResult
 import com.xandy.lite.models.ui.SongToggle
+import com.xandy.lite.models.ui.Transitions
 import com.xandy.lite.models.ui.UpdateResult
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import com.xandy.lite.views.AddToPlaylistView
 import com.xandy.lite.views.LocalAlbumView
 import com.xandy.lite.views.LocalArtistView
@@ -61,6 +70,8 @@ import com.xandy.lite.views.LocalMusicView
 import com.xandy.lite.views.LocalPlaylistView
 import com.xandy.lite.views.lyrics.LyricsListView
 import com.xandy.lite.views.edit.audio.EditAudioView
+import com.xandy.lite.views.lyrics.LyricIndex
+import com.xandy.lite.views.lyrics.LyricsEditorView
 import com.xandy.lite.views.picked.song.SongView
 import com.xandy.lite.views.settings.SettingsView
 import kotlinx.coroutines.launch
@@ -68,10 +79,10 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun MainNavHost(
-    mainNavController: NavHostController, getUIStyle: GetUIStyle,
-    getController: () -> Unit, navVM: NavViewModel
+    mainNavController: NavHostController, getUIStyle: GetUIStyle, pm : PreferencesManager,
+    getController: () -> Unit, onRestartPlayer: () -> Unit, navVM: NavViewModel
 ) {
-    val content = CustomNavigationContent(getUIStyle)
+    val content = CustomNavigationContent(getUIStyle, navVM)
     val context = LocalContext.current
     val sd by navVM.songDetails.collectAsStateWithLifecycle()
     val modifier =
@@ -86,6 +97,10 @@ fun MainNavHost(
         val route = mainNavController.previousBackStackEntry?.destination?.route
         route?.let { navVM.updateRoute(it) }
         mainNavController.popBackStack()
+    }
+    val onPopBackToHome: () -> Unit = {
+        navVM.updateRoute(LocalMusicDestination.route)
+        mainNavController.navigate(LocalMusicDestination.route)
     }
 
     val onNavigate: (String) -> Unit = {
@@ -118,30 +133,16 @@ fun MainNavHost(
     key(requestEvents) {
         requestEvents?.let { updateUUIDsLauncher.launch(it.first) }
     }
-    content.CustomNavigationTabBars(mainNavController, navVM, getController) {
+    val enterTransition = Transitions.enterTransition
+    val exitTransition = Transitions.exitTransition
+    val swipeInTransition = Transitions.swipeInTransition
+    val swipeOutTransition = Transitions.swipeOutTransition
+
+    content.CustomNavigationTabBars(mainNavController, getController) {
         NavHost(navController = mainNavController, startDestination = LocalMusicDestination.route) {
             composable(
                 route = PickedSongDestination.route,
-                enterTransition = {
-                    slideIntoContainer(
-                        towards = AnimatedContentTransitionScope.SlideDirection.Up,
-                        animationSpec = SpringSpec(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                            visibilityThreshold = IntOffset.VisibilityThreshold
-                        )
-                    )
-                },
-                exitTransition = {
-                    slideOutOfContainer(
-                        towards = AnimatedContentTransitionScope.SlideDirection.Down,
-                        animationSpec = SpringSpec(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                            visibilityThreshold = IntOffset.VisibilityThreshold
-                        )
-                    )
-                }
+                enterTransition = enterTransition, exitTransition = exitTransition
             ) {
                 val songVM: PickedSongVM = viewModel(factory = AppVMProvider.Factory)
                 var songToggle by rememberSaveable { mutableStateOf<SongToggle>(SongToggle.Details) }
@@ -153,7 +154,7 @@ fun MainNavHost(
                         onSpecialPopBack()
                     }
                 }
-                SongView(songVM, getUIStyle,{ songToggle = it }, songToggle)
+                SongView(songVM, getUIStyle, { songToggle = it }, songToggle)
             }
 
             composable(LocalMusicDestination.route) {
@@ -197,37 +198,37 @@ fun MainNavHost(
                     LocalMusicView(
                         modifier = modifier, getUIStyle = getUIStyle, localMediaVM = localMediaVM,
                         onNavToPl = {
-                            coroutineScope.launch { navVM.updatePlUUID(it) }
+                            navVM.updatePlUUID(it)
                             onNavigate(LocalPlDestination.route)
                         },
                         onNavToAlbum = {
                             if (isSearching) navVM.turnOffSearch()
-                            coroutineScope.launch { navVM.updateAlbumName(it) }
+                            navVM.updateAlbumName(it)
                             onNavigate(LocalAlbumDestination.route)
                         },
                         onNavToArtist = {
                             if (isSearching) navVM.turnOffSearch()
-                            coroutineScope.launch { navVM.updateArtistName(it) }
+                            navVM.updateArtistName(it)
                             onNavigate(LocalArtistDestination.route)
                         },
                         onNavToGenre = {
                             if (isSearching) navVM.turnOffSearch()
-                            coroutineScope.launch { navVM.updateGenreName(it) }
+                            navVM.updateGenreName(it)
                             onNavigate(LocalGenreDestination.route)
                         },
                         onNavToFolder = { s, l ->
                             if (isSearching) navVM.turnOffSearch()
-                            coroutineScope.launch { navVM.updateBucketKey(s, l) }
+                            navVM.updateBucketKey(s, l)
                             onNavigate(LocalBucketDestination.route)
                         },
                         onEdit = {
                             if (isSearching) navVM.turnOffSearch()
-                            coroutineScope.launch { navVM.updateAudioUri(it) }
+                            navVM.updateAudioUri(it)
                             onNavigate(EditAudioDestination.route)
                         },
                         onAdd = { id ->
                             if (isSearching) navVM.turnOffSearch()
-                            coroutineScope.launch { navVM.toggleSong(id) }
+                            navVM.toggleSong(id)
                             onNavigate(AddToPlDestination.route)
                         }, currentId = sd?.id ?: "",
                         onDelete = { audio ->
@@ -236,7 +237,10 @@ fun MainNavHost(
                     )
                 }
             }
-            composable(LocalPlDestination.route) {
+            composable(
+                route = LocalPlDestination.route,
+                enterTransition = enterTransition, exitTransition = exitTransition
+            ) {
                 BackHandler {
                     if (isSelecting) {
                         if (isSearching) navVM.turnOffSearch()
@@ -253,17 +257,20 @@ fun MainNavHost(
                     LocalPlaylistView(
                         localPLVM, currentId = sd?.id ?: "", getUIStyle, it,
                         onAdd = { id ->
-                            coroutineScope.launch { navVM.toggleSong(id) }
+                            navVM.toggleSong(id)
                             onNavigate(AddToPlDestination.route)
                         },
                         onEditSong = { songId ->
-                            coroutineScope.launch { navVM.updateAudioUri(songId) }
+                            navVM.updateAudioUri(songId)
                             onNavigate(EditAudioDestination.route)
                         }
                     )
                 } ?: Box(modifier = modifier)
             }
-            composable(EditAudioDestination.route) {
+            composable(
+                route = EditAudioDestination.route,
+                enterTransition = swipeInTransition, exitTransition = swipeOutTransition
+            ) {
                 BackHandler { onPopBackStack() }
                 val editAudioVM: EditAudioVM = viewModel(factory = AppVMProvider.Factory)
                 val pickedAudio by editAudioVM.pickedAudio.collectAsStateWithLifecycle()
@@ -292,10 +299,7 @@ fun MainNavHost(
                     }
                 ) { writeRequestLauncher ->
                     pickedAudio?.let {
-                        LaunchedEffect(Unit) { editAudioVM.updateScrollSet() }
-                        EditAudioView(
-                            it, enabled, getUIStyle, editAudioVM, artworkList
-                        ) { newAudio, lyrics ->
+                        EditAudioView(it, enabled, getUIStyle, artworkList) { newAudio, lyrics ->
                             coroutineScope.launch {
                                 updatedAudioWithLyrics = Pair(newAudio, lyrics)
                                 enabled = false
@@ -332,8 +336,8 @@ fun MainNavHost(
                 AddToPlaylistView(
                     getUIStyle = getUIStyle, modifier = modifier, vm = vm, enabled = dismissEnabled,
                     onAdd = {
+                        dismissEnabled = false
                         coroutineScope.launch {
-                            dismissEnabled = false
                             val result = vm.insertSongsToPl(navVM.getSelectedSongIds(), it)
                             if (result) {
                                 navVM.endSelect(); navVM.resetSearch()
@@ -348,8 +352,8 @@ fun MainNavHost(
                         }
                     }, showDialog = showDialog,
                     onAddNew = {
+                        dismissEnabled = false
                         coroutineScope.launch {
-                            dismissEnabled = false
                             val (result, id) = vm.addPlWithSongs(navVM.getSelectedSongIds(), it)
                             when (result) {
                                 InsertResult.Exists -> Toast.makeText(
@@ -417,11 +421,11 @@ fun MainNavHost(
                         LocalAlbumView(
                             it, enabled = !alIsLoading, getUIStyle = getUIStyle, vm = localAlbumVM,
                             onEdit = { str ->
-                                coroutineScope.launch { navVM.updateAudioUri(str) }
+                                navVM.updateAudioUri(str)
                                 onNavigate(EditAudioDestination.route)
                             },
                             onAdd = { id ->
-                                coroutineScope.launch { navVM.toggleSong(id) }
+                                navVM.toggleSong(id)
                                 onNavigate(AddToPlDestination.route)
                             },
                             onDelete = { audio ->
@@ -476,11 +480,11 @@ fun MainNavHost(
                         LocalArtistView(
                             it, enabled = !alIsLoading, getUIStyle = getUIStyle, vm = localArtistVM,
                             onEdit = { str ->
-                                coroutineScope.launch { navVM.updateAudioUri(str) }
+                                navVM.updateAudioUri(str)
                                 onNavigate(EditAudioDestination.route)
                             }, modifier = modifier,
                             onAdd = { id ->
-                                coroutineScope.launch { navVM.toggleSong(id) }
+                                navVM.toggleSong(id)
                                 onNavigate(AddToPlDestination.route)
                             },
                             onDelete = { audio ->
@@ -536,11 +540,11 @@ fun MainNavHost(
                         LocalFolderView(
                             f, enabled = !alIsLoading, getUIStyle = getUIStyle, vm = localBucketVM,
                             onEdit = { str ->
-                                coroutineScope.launch { navVM.updateAudioUri(str) }
+                                navVM.updateAudioUri(str)
                                 onNavigate(EditAudioDestination.route)
                             }, modifier = modifier,
                             onAdd = { id ->
-                                coroutineScope.launch { navVM.toggleSong(id) }
+                                navVM.toggleSong(id)
                                 onNavigate(AddToPlDestination.route)
                             },
                             onDelete = { audio ->
@@ -596,11 +600,11 @@ fun MainNavHost(
                         LocalGenreView(
                             g, enabled = !alIsLoading, getUIStyle = getUIStyle, vm = localGenreVM,
                             onEdit = { str ->
-                                coroutineScope.launch { navVM.updateAudioUri(str) }
+                                navVM.updateAudioUri(str)
                                 onNavigate(EditAudioDestination.route)
                             }, modifier = modifier,
                             onAdd = { id ->
-                                coroutineScope.launch { navVM.toggleSong(id) }
+                                navVM.toggleSong(id)
                                 onNavigate(AddToPlDestination.route)
                             },
                             onDelete = { audio ->
@@ -613,12 +617,30 @@ fun MainNavHost(
                 }
             }
             composable(SettingsDestination.route) {
-                BackHandler { onPopBackStack() }
-                SettingsView(getUIStyle)
+                BackHandler { onPopBackToHome() }
+                SettingsView(
+                    controller = navVM.mediaController.collectAsStateWithLifecycle().value,
+                    onRestartPlayer = onRestartPlayer, getUIStyle, pm
+                )
             }
             composable(LyricsListDestination.route) {
-                BackHandler { onPopBackStack() }
-                LyricsListView(getUIStyle)
+                BackHandler { onPopBackToHome() }
+                LyricsListView(
+                    onEdit = {
+                        navVM.updatePickedLyrics(it)
+                        onNavigate(LyricsEditorDestination.route)
+                    },
+                    getUIStyle = getUIStyle
+                )
+            }
+            composable(LyricsEditorDestination.route) {
+                val lyricsEditorVM: LyricsEditorVM = viewModel(factory = AppVMProvider.Factory)
+                BackHandler {
+                    navVM.updateIndexListener(LyricIndex.UNAVAILABLE)
+                    navVM.stopCheckingPosition()
+                    onPopBackStack()
+                }
+                LyricsEditorView(lyricsEditorVM, onUpsert = onPopBackStack, getUIStyle)
             }
         }
     }
@@ -696,6 +718,9 @@ private fun requestWritePermission(
     intent: PendingIntent
 ) = writeRequestLauncher.launch(IntentSenderRequest.Builder(intent.intentSender).build())
 
+/**
+ * @param route The route to navigate to
+ * @param popUpToRoute The route to be removed*/
 private fun NavHostController.navigateAndRemoveFromStack(
     route: String, popUpToRoute: String
 ) = this.navigate(route) {

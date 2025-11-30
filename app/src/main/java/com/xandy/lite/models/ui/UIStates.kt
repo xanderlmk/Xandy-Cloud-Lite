@@ -43,7 +43,7 @@ data class PickedSongVMStates(
 data class LocalAudioStates(
     val isLoading: Boolean, val alDirection: Boolean, val isSelecting: Boolean,
     val plsDirection: Boolean, val tab: LocalMusicTabs, val isSearching: Boolean,
-    val percent: Int, val autoUpdate: Boolean
+    val gettingPics: Boolean, val autoUpdate: Boolean
 ) : Parcelable
 
 /**

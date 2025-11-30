@@ -3,13 +3,18 @@ package com.xandy.lite.controllers.view.models
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.xandy.lite.controllers.Controller
 import com.xandy.lite.controllers.setQueue
+import com.xandy.lite.db.lyrics.repo.LyricsRepository
 import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Bucket
 import com.xandy.lite.db.tables.Playlist
+import com.xandy.lite.db.tables.toMediaItems
+import com.xandy.lite.models.itemKey
 import com.xandy.lite.models.ui.LocalMediaStates
 import com.xandy.lite.models.ui.LocalMusicTabs
+import com.xandy.lite.models.ui.MediaItemWithCreatedOn
 import com.xandy.lite.navigation.UIRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -19,7 +24,9 @@ import kotlin.collections.filter
 import kotlin.text.isBlank
 
 class LocalMediaVM(
-    private val songRepository: SongRepository, private val uiRepository: UIRepository
+    private val songRepository: SongRepository,
+    private val lyricsRepository: LyricsRepository,
+    private val uiRepository: UIRepository
 ) : ViewModel() {
     companion object {
         private const val TIMEOUT_MILLIS = 4_000L
@@ -63,16 +70,26 @@ class LocalMediaVM(
     val isSelecting = uiRepository.isSelecting
     val query = uiRepository.query
 
-    val filteredAudioFiles = combine(songRepository.audioFiles, uiRepository.query, isSearching) { al, q, s ->
-        al.list.filter { audio ->
-            if (q.isBlank() || !s) return@filter true
-            audio.song.title.contains(q, ignoreCase = true) ||
-                    audio.song.artist.contains(q, ignoreCase = true)
-        }
-    }.stateIn(
-        scope = viewModelScope, started = SharingStarted.Lazily,
-        initialValue = emptyList()
+    val filteredAudioFiles =
+        combine(songRepository.audioFiles, uiRepository.query, isSearching) { al, q, s ->
+            al.list.filter { audio ->
+                if (q.isBlank() || !s) return@filter true
+                audio.song.title.contains(q, ignoreCase = true) ||
+                        audio.song.artist.contains(q, ignoreCase = true)
+            }
+        }.stateIn(
+            scope = viewModelScope, started = SharingStarted.Lazily,
+            initialValue = emptyList()
+        )
+
+
+    val unsortedQueue = songRepository.unsortedQueue.stateIn(
+        scope = viewModelScope, started = SharingStarted.Eagerly, emptyList()
     )
+    fun addToQueue(list: List<AudioFile>): Boolean =
+        Controller.addToQueue(mediaController.value, list, unsortedQueue.value) {
+            viewModelScope.launch { songRepository.addToQueue(it) }
+        }
 
     val selectedSongIds = uiRepository.selectedSongIds
     fun startSelecting(songId: String) = uiRepository.startSelectingSongs(songId)
@@ -84,7 +101,8 @@ class LocalMediaVM(
             setQueue(ctrl, list, song) {
                 viewModelScope.launch { songRepository.setNewQueue(it, "") }
             }
-            songRepository.updatePickedSong(song.id)        }
+            songRepository.updatePickedSong(song.id)
+        }
     }
 
     fun updateTab(tab: LocalMusicTabs) = songRepository.updateLocalTab(tab)
@@ -93,10 +111,11 @@ class LocalMediaVM(
     suspend fun deletePlaylist(playlist: Playlist) =
         songRepository.deleteLocalPlaylist(playlist)
 
-    val lyricsList = songRepository.lyricsFlow().stateIn(
+    val lyricsList = lyricsRepository.lyricsFlow().stateIn(
         scope = viewModelScope, started = SharingStarted.Lazily,
         initialValue = emptyList()
     )
-    suspend fun updateSongLyrics(lyricsId:String, songUri: String) =
-        songRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
+
+    suspend fun updateSongLyrics(lyricsId: String, songUri: String) =
+        lyricsRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
 }

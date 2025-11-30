@@ -10,6 +10,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
 import com.xandy.lite.db.LyricsId
+import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.db.tables.LyricsWithAudio
 import com.xandy.lite.models.application.XANDY_CLOUD
@@ -27,6 +28,7 @@ interface LyricsDao {
     @Upsert
     suspend fun upsertLyrics(lyrics: Lyrics)
 
+    @Transaction
     @Query("""SELECT * FROM lyrics""")
     fun getLyricsWithAudio(): Flow<List<LyricsWithAudio>>
 
@@ -46,6 +48,9 @@ interface LyricsDao {
     @Query("""UPDATE local_audio SET lyrics_id = NULL WHERE song_id = :songId""")
     suspend fun removeLyricsOfSong(songId: String)
 
+    @Query("""SELECT * FROM local_audio WHERE lyrics_id = :lyricsId LIMIT 1""")
+    suspend fun getSongOrNullByLyricsId(lyricsId: String): AudioFile?
+
     @Transaction
     suspend fun importLyrics(lyrics: Lyrics): InsertResult = try {
         val l = getLyricsIdOrNull(lyrics.id)
@@ -57,5 +62,11 @@ interface LyricsDao {
     } catch (e: Exception) {
         Log.e(XANDY_CLOUD, "${e.printStackTrace()}")
         InsertResult.Failure
+    }
+
+    @Transaction
+    suspend fun upsertLyricsWithSong(songUri: String, lyrics: Lyrics) {
+        upsertLyrics(lyrics)
+        updateLyricsOfSong(lyricsId = lyrics.id, songUri = songUri)
     }
 }

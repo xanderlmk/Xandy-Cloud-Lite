@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,10 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.session.MediaController
+import com.xandy.lite.R
 import com.xandy.lite.controllers.view.models.PickedSongVM
 import com.xandy.lite.models.ui.SongDetails
 import com.xandy.lite.models.ui.SongToggle
@@ -40,7 +43,7 @@ import com.xandy.lite.models.ui.order.by.reverseSort
 import com.xandy.lite.models.ui.order.by.toOrderedByClass
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.collectPickedSongVMStatesWithLifecycle
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import kotlinx.coroutines.launch
 
 
@@ -57,7 +60,13 @@ fun SongView(
     } ?: 1
     val ci = ContentIcons(getUIStyle)
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
+    var landscapeState by rememberSaveable { mutableStateOf(isLandscape) }
+    LaunchedEffect(Unit) {
+        if (landscapeState != isLandscape) {
+            songVM.checkPosition()
+            landscapeState = isLandscape
+        }
+    }
     mediaController?.let { controller ->
         if (isLandscape)
             HorizontalSongView(
@@ -133,11 +142,15 @@ fun SongLyrics(song: SongDetails?, position: Long, getUIStyle: GetUIStyle, modif
     val coroutineScope = rememberCoroutineScope()
     var viewPortHeight by rememberSaveable { mutableIntStateOf(0) }
     val itemHeights = rememberSaveable { mutableListOf<Int>() }
+    var activeIndex by rememberSaveable { mutableIntStateOf(0) }
+    val musicPainter = painterResource(R.drawable.outline_music_note)
+    val ci = ContentIcons(getUIStyle)
     LaunchedEffect(list.size) {
         when {
             itemHeights.size < list.size -> {
                 repeat(list.size - itemHeights.size) { itemHeights.add(0) }
             }
+
             itemHeights.size > list.size -> {
                 for (i in itemHeights.size - 1 downTo list.size) itemHeights.removeAt(i)
             }
@@ -145,7 +158,10 @@ fun SongLyrics(song: SongDetails?, position: Long, getUIStyle: GetUIStyle, modif
     }
     LaunchedEffect(position) {
         val index =
-            list.indexOfFirst { position in it.range }.takeIf { it != -1 } ?: return@LaunchedEffect
+            list.indexOfFirst { position in it.range }.takeIf { it != -1 }
+                ?: list.indexOfLast { it.range.last < position }.takeIf { it != -1 }
+                ?: return@LaunchedEffect
+        activeIndex = index
         coroutineScope.launch {
             val itemH = itemHeights.getOrNull(index) ?: 0
             if (viewPortHeight > 0 && itemH > 0) {
@@ -165,6 +181,9 @@ fun SongLyrics(song: SongDetails?, position: Long, getUIStyle: GetUIStyle, modif
     ) {
         if (list.isNotEmpty())
             itemsIndexed(list) { index, lyricLine ->
+                val isActive = activeIndex == index
+                val tintColor = if (isActive) getUIStyle.themedOnContainerColor()
+                else getUIStyle.tabTextColor(false)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -173,11 +192,20 @@ fun SongLyrics(song: SongDetails?, position: Long, getUIStyle: GetUIStyle, modif
                             itemHeights[index] = cords.size.height
                         }
                 ) {
-                    Text(
+                    if (lyricLine.text == "$;12345$") Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(25.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        ci.ContentIcon(musicPainter, tint = tintColor)
+                        ci.ContentIcon(musicPainter, tint = tintColor)
+                        ci.ContentIcon(musicPainter, tint = tintColor)
+                    } else Text(
                         text = lyricLine.text, style = MaterialTheme.typography.displaySmall,
-                        fontWeight = if (position in lyricLine.range) FontWeight.SemiBold else null,
-                        color = if (position in lyricLine.range) getUIStyle.themedOnContainerColor()
-                        else getUIStyle.tabTextColor(false)
+                        fontWeight = if (isActive) FontWeight.SemiBold else null,
+                        color = tintColor
                     )
                 }
             }

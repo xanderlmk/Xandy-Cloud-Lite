@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.xandy.lite.R
 import com.xandy.lite.db.XandyDatabase
+import com.xandy.lite.db.lyrics.repo.LyricsRepository
+import com.xandy.lite.db.lyrics.repo.OfflineLyricsRepo
 import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.db.song.repo.SongRepositoryImpl
 import com.xandy.lite.models.ui.drawableResUri
@@ -16,6 +18,7 @@ import kotlin.getValue
 
 interface AppContainer {
     val songRepository: SongRepository
+    val lyricsRepository: LyricsRepository
     val uiRepository: UIRepository
 }
 
@@ -34,6 +37,11 @@ class AppDataContainer(
             XandyDatabase.getDatabase(context, scope).audioDao(),
             XandyDatabase.getDatabase(context, scope).playlistDao(),
             XandyDatabase.getDatabase(context, scope).bucketDao(), scope
+        )
+    }
+    override val lyricsRepository by lazy {
+        OfflineLyricsRepo(
+            XandyDatabase.getDatabase(context, scope).audioDao(), context
         )
     }
     override val uiRepository: UIRepository by lazy {

@@ -7,11 +7,11 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.edit
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.media3.common.MediaItem
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.media3.common.Tracks
 import androidx.media3.session.MediaController
-import com.xandy.lite.controllers.setInitialQueue
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.dataStore
 import com.xandy.lite.models.itemKey
@@ -22,7 +22,6 @@ import com.xandy.lite.models.ui.order.by.OrderSongsBy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -32,24 +31,22 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
 class MediaControllerStates(private val appPref: SharedPreferences, private val context: Context) {
+
     companion object {
         private const val DELAYED_CHECK = 425L
-        private val CURRENT_MI = stringPreferencesKey("current_media_item")
         private val QUEUE_NAME = stringPreferencesKey("picked_queue_name")
+        private val QUEUE_SET = stringPreferencesKey("queue_json")
+        private const val CURRENT_MI = "current_media_item"
+        private const val LAST_POSITION = "last_position"
     }
 
-    private var _initialQueue: String?
-        get() = appPref.getString("queue", null)
-        set(value) = appPref.edit { putString("queue", value) }
-    private val _queue = MutableStateFlow(
-        _initialQueue?.let {
-            Json.Default.decodeFromString(
-                ListSerializer(String.Companion.serializer()), it
-            )
-        }
-            ?: emptyList()
-    )
-    val queue = _queue.asStateFlow()
+    val queue = context.dataStore.data.map { preferences ->
+        try {
+            preferences[QUEUE_SET]?.let { Json.decodeFromString<List<String>>(it) }
+        } catch (_: Exception) {
+            emptyList()
+        } ?: emptyList()
+    }
     private val _mediaController = MutableStateFlow<MediaController?>(null)
     val mediaController = _mediaController.asStateFlow()
     private val orderedClass = OrderBy(appPref, context)
@@ -65,6 +62,9 @@ class MediaControllerStates(private val appPref: SharedPreferences, private val 
     val pickedQueueName = context.dataStore.data.map { preferences ->
         preferences[QUEUE_NAME] ?: ""
     }.flowOn(Dispatchers.IO)
+
+    private val _itemKey = MutableStateFlow(appPref.getString(CURRENT_MI, "") ?: "")
+    val itemKey = _itemKey.asStateFlow()
 
     fun updateLocalALOrder(orderSongsBy: OrderSongsBy) {
         _audioOrderedBy.update { orderSongsBy }; orderedClass.updateALOrder(orderSongsBy)
@@ -91,19 +91,14 @@ class MediaControllerStates(private val appPref: SharedPreferences, private val 
     val durationMs = _durationMs.asStateFlow()
     val shuffleEnabled = orderedClass.shuffleEnabled
 
-    suspend fun updateMediaController(mc: MediaController, queue: List<MediaItem>) {
-        _mediaController.update { mc }
-        if (queue.isEmpty() || mc.mediaItemCount > 0) return
-        val itemKey = getInitialMediaKey(context)
-        val first = queue.find { it.itemKey() == itemKey }
-        val index = queue.indexOf(first).takeIf { it >= 0 } ?: 0
-        _mediaController.value?.let { setInitialQueue(it, queue, index) }
-    }
+    fun updateMediaController(mc: MediaController) = _mediaController.update { mc }
 
     fun resetMediaController() {
         try {
-            _mediaController.update { it?.release(); null }
-            Log.i(XANDY_CLOUD, "Released MC")
+            _mediaController.value?.release()
+            mediaController.value?.release()
+            _mediaController.update { null }
+            Log.i(XANDY_CLOUD, "Released SongRepo MC")
         } catch (_: Exception) {
             _mediaController.update { null }
         }
@@ -122,9 +117,16 @@ class MediaControllerStates(private val appPref: SharedPreferences, private val 
     private val handler = Handler(Looper.getMainLooper())
     private val playbackRunnable = object : Runnable {
         override fun run() {
-            val currentPosition = _mediaController.value?.currentPosition ?: return
-            _positionMs.update { currentPosition }
-            handler.postDelayed(this, DELAYED_CHECK)
+            try {
+                val currentPosition = _mediaController.value?.currentPosition ?: return
+                _positionMs.update { currentPosition }
+                _mediaController.value?.currentMediaItem?.itemKey()?.let {
+                        updateMediaItem(it)
+                }
+                handler.postDelayed(this, DELAYED_CHECK)
+            } catch (_: Exception) {
+                Log.w(XANDY_CLOUD, "Failed to update position")
+            }
         }
     }
 
@@ -135,21 +137,50 @@ class MediaControllerStates(private val appPref: SharedPreferences, private val 
 
     suspend fun updateQueue(songIds: List<String>, name: String) = withContext(Dispatchers.IO) {
         try {
-            context.dataStore.edit { settings -> settings[QUEUE_NAME] = name }
+            context.dataStore.edit { settings ->
+                settings[QUEUE_NAME] = name
+                settings[QUEUE_SET] =
+                    Json.encodeToString(ListSerializer(String.serializer()), songIds)
+            }
         } catch (e: Exception) {
             Log.w(XANDY_CLOUD, "Failed to update name to data store: ${e.printStackTrace()}")
         }
-        _queue.update {
-            _initialQueue =
-                Json.Default.encodeToString(ListSerializer(String.serializer()), songIds)
-            songIds
+        return@withContext
+    }
+
+    suspend fun updateQueue(songIds: List<String>) = withContext(Dispatchers.IO) {
+        try {
+            context.dataStore.edit { settings ->
+                settings[QUEUE_SET] =
+                    Json.encodeToString(ListSerializer(String.serializer()), songIds)
+            }
+        } catch (e: Exception) {
+            Log.w(XANDY_CLOUD, "Failed to update name to data store: ${e.printStackTrace()}")
         }
         return@withContext
     }
-    private suspend fun getInitialMediaKey(context: Context) = try {
-        context.dataStore.data.map { preferences -> preferences[CURRENT_MI] ?: "" }.first()
-    } catch (e: Exception) {
-        Log.e(XANDY_CLOUD, "Failed to get repeat mode: $e")
-        ""
+
+    fun updateLastestPlayerInfo() {
+        try {
+            _mediaController.value?.let { mc ->
+                val itemKey = mc.currentMediaItem?.mediaId ?: return@let
+                Log.i(XANDY_CLOUD, "Updating lastest info, position: ${mc.currentPosition}")
+                updateLastPosition(mc.currentPosition)
+                updateMediaItem(itemKey)
+            } ?: Log.w(XANDY_CLOUD, "Null controller")
+        } catch (_: Exception) {
+            Log.w(XANDY_CLOUD, "Failed to update lastest player info")
+        }
     }
+
+    fun updateMediaItem(key: String) = _itemKey.update {
+        appPref.edit { putString(CURRENT_MI, key) }; key
+    }
+
+    private fun updateLastPosition(position: Long) = try {
+        appPref.edit { putLong(LAST_POSITION, position) }
+    } catch (e: Exception) {
+        Log.e(XANDY_CLOUD, "Failed to update media key: $e")
+    }
+
 }

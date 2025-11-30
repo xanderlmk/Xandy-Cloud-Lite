@@ -36,7 +36,7 @@ import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.LyricLine
 import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import my.nanihadesuka.compose.ColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
 
@@ -45,12 +45,9 @@ import my.nanihadesuka.compose.ScrollbarSettings
 fun HorizontalEditAudioView(
     audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean, lyrics: Lyrics,
     onLyricsChange: (Lyrics) -> Unit, onUpdate: (AudioFile, Lyrics?) -> Unit,
-    allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle, set: List<LyricLine>,
-    editAudioVM: EditAudioVM
+    allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle
 ) {
     val scrollState = rememberScrollState()
-    val ci = ContentIcons(getUIStyle)
-
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -122,9 +119,7 @@ fun HorizontalEditAudioView(
                     onDaySelected = { if (audio.month != null) onAudioChange(audio.copy(day = it)) },
                     onMonthSelected = { onAudioChange(audio.copy(month = it)) }
                 )
-                LyricsOptions(ci, lyrics, audio.durationMillis, set, editAudioVM) {
-                    onLyricsChange(it)
-                }
+                LyricsOptions( lyrics) { onLyricsChange(it) }
             }
         }
         Column(

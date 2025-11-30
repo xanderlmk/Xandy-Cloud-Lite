@@ -3,7 +3,7 @@ package com.xandy.lite.navigation
 import kotlinx.serialization.Serializable
 
 
-interface NavDestinations {
+private interface NavDestinations {
     val route: String
 }
 
@@ -63,4 +63,9 @@ object SettingsDestination: NavDestinations {
 @Serializable
 object LyricsListDestination: NavDestinations {
     override val route = "lyrics_list"
+}
+
+@Serializable
+object LyricsEditorDestination: NavDestinations {
+    override val route = "lyrics_editor"
 }

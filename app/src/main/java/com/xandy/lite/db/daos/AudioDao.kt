@@ -9,6 +9,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.xandy.lite.db.AudioDateModified
 import com.xandy.lite.db.AudioUri
 import com.xandy.lite.db.AudioDetails
 import com.xandy.lite.db.AudioSongId
@@ -38,16 +39,16 @@ interface AudioDao : LyricsDao {
     suspend fun getInitialQueue(ids: List<String>): List<AudioFile>
 
     /** Permanently hide selected audio files. */
-    @Query("""UPDATE local_audio SET hidden = 1, permanentlyHidden = 1 WHERE uri IN (:ids)""")
+    @Query("""UPDATE local_audio SET hidden = 1, permanently_hidden = 1 WHERE song_id IN (:ids)""")
     suspend fun hideAudioFiles(ids: List<String>)
 
-    @Query("""UPDATE local_audio SET hidden = 0, permanentlyHidden = 0 WHERE uri in (:ids)""")
+    @Query("""UPDATE local_audio SET hidden = 0, permanently_hidden = 0 WHERE song_id in (:ids)""")
     suspend fun showAudioFiles(ids: List<String>)
 
-    @Query("""UPDATE local_audio SET hidden = 1, permanentlyHidden = 1 WHERE uri = :uri""")
+    @Query("""UPDATE local_audio SET hidden = 1, permanently_hidden = 1 WHERE uri = :uri""")
     suspend fun hideAudioFile(uri: String)
 
-    @Query("""UPDATE local_audio SET hidden = 0, permanentlyHidden = 0 WHERE uri = :uri""")
+    @Query("""UPDATE local_audio SET hidden = 0, permanently_hidden = 0 WHERE uri = :uri""")
     suspend fun showAudioFile(uri: String)
 
     @Query(
@@ -67,23 +68,26 @@ interface AudioDao : LyricsDao {
     suspend fun getAudioFiles(): List<AudioFile>
 
     @Transaction
+    @Query("""SELECT * FROM local_audio WHERE song_id = :key""")
+    fun getSongWithPls(key: String): Flow<AudioWithPls?>
+
     @Query(
         """
-        SELECT * FROM local_audio WHERE song_id = :key
+        SELECT hidden, permanently_hidden, lyrics_id
+        FROM local_audio WHERE song_id = :id OR uri = :uri
         """
     )
-    suspend fun getSongWithPls(key: String): AudioWithPls?
-
-    @Query("""
-        SELECT hidden, permanentlyHidden, lyrics_id 
-        FROM local_audio WHERE song_id = :id OR uri = :uri
-        """)
     suspend fun getAudioDetails(id: String, uri: Uri): AudioDetails
 
     @Query(
-        """SELECT song_id FROM local_audio WHERE uri = :uri"""
+        """SELECT song_id FROM local_audio WHERE uri = :uri OR file_id = :fileId"""
     )
-    suspend fun getAudioId(uri: Uri): AudioSongId?
+    suspend fun getAudioId(uri: Uri, fileId: Long): AudioSongId?
+
+    @Query(
+        """SELECT date_modified FROM local_audio WHERE uri = :uri OR file_id = :fileId"""
+    )
+    suspend fun getAudioDateModified(uri: Uri, fileId: Long): AudioDateModified?
 
     @Transaction
     @Query("""SELECT * FROM local_audio WHERE uri = :uri""")
@@ -91,25 +95,31 @@ interface AudioDao : LyricsDao {
 
 
     @Transaction
-    suspend fun upsertAudios(audios: List<AudioFile>) {
-        val originalList = getAudioFiles(audios.map { it.id }, audios.map { it.uri })
+    suspend fun upsertAudios(pairs: List<Pair<AudioFile, Boolean>>) {
+        val originalList = getAudioFiles(pairs.map { it.first.id }, pairs.map { it.first.uri })
         val originalIds = originalList.map { it.id }
         val originalUris = originalList.map { it.uri }
-        Log.i(XANDY_CLOUD, "Upserting ${audios.size} audio files.")
-        audios.forEach { audio ->
-            if (audio.uri in originalUris || audio.id in originalIds) {
+        Log.i(XANDY_CLOUD, "Upserting ${pairs.size} audio files.")
+        pairs.forEach { pair ->
+            val audio = pair.first
+            val modified = pair.second
+            val songId = getAudioId(audio.uri, audio.fileId)?.id
+            if (audio.uri in originalUris || audio.id in originalIds || songId != null) {
                 val d = getAudioDetails(audio.id, audio.uri)
-                updateAudio(
-                    AudioFile(
-                        id = audio.id, uri = audio.uri, displayName = audio.displayName,
-                        picture = audio.picture, title = audio.title, artist = audio.artist,
-                        album = audio.album, genre = audio.genre, createdOn = audio.createdOn,
-                        hidden = d.hidden, durationMillis = audio.durationMillis,
-                        permanentlyHidden = d.permanentlyHidden, lyricsId = d.lyricsId,
-                        year = audio.year, day = audio.day, month = audio.month,
-                        volumeName = audio.volumeName, bucketId = audio.bucketId
+                if (modified)
+                    updateAudio(
+                        AudioFile(
+                            id = songId ?: audio.id, uri = audio.uri,
+                            displayName = audio.displayName, picture = audio.picture,
+                            title = audio.title, artist = audio.artist, album = audio.album,
+                            genre = audio.genre, createdOn = audio.createdOn, hidden = d.hidden,
+                            durationMillis = audio.durationMillis,
+                            permanentlyHidden = d.permanentlyHidden, lyricsId = d.lyricsId,
+                            year = audio.year, day = audio.day, month = audio.month,
+                            volumeName = audio.volumeName, bucketId = audio.bucketId,
+                            fileId = audio.fileId, dateModified = audio.dateModified
+                        )
                     )
-                )
             } else insertAudio(audio)
         }
     }
@@ -169,7 +179,8 @@ interface AudioDao : LyricsDao {
     @Transaction
     @Query(
         """
-        SELECT * FROM local_audio WHERE hidden = 0 AND permanentlyHidden = 0 ORDER BY title ASC
+        SELECT * FROM local_audio WHERE hidden = 0 AND permanently_hidden = 0 
+        ORDER BY title COLLATE NOCASE ASC
         """
     )
     fun getFlowOfSongsWithPlsByTitleASC(): Flow<List<AudioWithPls>>
@@ -177,7 +188,8 @@ interface AudioDao : LyricsDao {
     @Transaction
     @Query(
         """
-        SELECT * FROM local_audio WHERE hidden = 0 AND permanentlyHidden = 0 ORDER BY title DESC
+        SELECT * FROM local_audio WHERE hidden = 0 AND permanently_hidden = 0 
+        ORDER BY title COLLATE NOCASE DESC
         """
     )
     fun getFlowOfSongsWithPlsByTitleDESC(): Flow<List<AudioWithPls>>
@@ -185,7 +197,7 @@ interface AudioDao : LyricsDao {
     @Transaction
     @Query(
         """
-        SELECT * FROM local_audio WHERE hidden = 0 AND permanentlyHidden = 0 ORDER BY createdOn ASC
+        SELECT * FROM local_audio WHERE hidden = 0 AND permanently_hidden = 0 ORDER BY created_on ASC
         """
     )
     fun getFlowOfSongsWithPlsByCreatedOnASC(): Flow<List<AudioWithPls>>
@@ -193,7 +205,7 @@ interface AudioDao : LyricsDao {
     @Transaction
     @Query(
         """
-        SELECT * FROM local_audio WHERE hidden = 0 AND permanentlyHidden = 0 ORDER BY createdOn DESC
+        SELECT * FROM local_audio WHERE hidden = 0 AND permanently_hidden = 0 ORDER BY created_on DESC
         """
     )
     fun getFlowOfSongsWithPlsByCreatedOnDESC(): Flow<List<AudioWithPls>>
@@ -201,7 +213,8 @@ interface AudioDao : LyricsDao {
     @Transaction
     @Query(
         """
-        SELECT * FROM local_audio WHERE hidden = 0 AND permanentlyHidden = 0 ORDER BY artist ASC
+        SELECT * FROM local_audio WHERE hidden = 0 AND permanently_hidden = 0 
+        ORDER BY artist COLLATE NOCASE ASC
         """
     )
     fun getFlowOfSongsWithPlsByArtistASC(): Flow<List<AudioWithPls>>
@@ -209,7 +222,8 @@ interface AudioDao : LyricsDao {
     @Transaction
     @Query(
         """
-        SELECT * FROM local_audio WHERE hidden = 0 AND permanentlyHidden = 0 ORDER BY artist DESC
+        SELECT * FROM local_audio WHERE hidden = 0 AND permanently_hidden = 0 
+        ORDER BY artist COLLATE NOCASE DESC
         """
     )
     fun getFlowOfSongsWithPlsByArtistDESC(): Flow<List<AudioWithPls>>
@@ -217,8 +231,18 @@ interface AudioDao : LyricsDao {
 
     @Query(
         """
-        SELECT * FROM local_audio WHERE hidden = 1 OR permanentlyHidden = 1 ORDER BY title ASC
+        SELECT * FROM local_audio WHERE hidden = 1 OR permanently_hidden = 1 
+        ORDER BY title COLLATE NOCASE ASC
         """
     )
     fun getFlowOfHiddenSongsByTitleASC(): Flow<List<AudioFile>>
+
+    @Query(
+        """
+            SELECT * FROM local_audio WHERE 
+            (title LIKE '%' || :query || '%' COLLATE NOCASE)
+            OR (artist LIKE '%' || :query || '%' COLLATE NOCASE)
+        """
+    )
+    fun searchForSong(query: String): Flow<List<AudioFile>>
 }

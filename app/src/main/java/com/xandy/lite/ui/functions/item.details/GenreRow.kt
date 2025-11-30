@@ -21,7 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xandy.lite.models.ui.Genre
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 @Composable
 fun GenreRow(genre: Genre, getUIStyle: GetUIStyle, onClick: () -> Unit) {

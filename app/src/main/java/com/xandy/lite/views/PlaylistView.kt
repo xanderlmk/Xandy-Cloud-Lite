@@ -25,13 +25,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xandy.lite.ui.functions.item.details.PlaylistOrderRow
 import com.xandy.lite.controllers.view.models.LocalPLVM
+import com.xandy.lite.models.XCToast
 import com.xandy.lite.models.ui.PlaylistWithCount
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.LyricsListDialog
 import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.SongRow
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import kotlinx.coroutines.launch
 import my.nanihadesuka.compose.LazyColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
@@ -76,7 +77,7 @@ fun LocalPlaylistView(
     val lyricsList by playlistVM.lyricsList.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var enabled by rememberSaveable { mutableStateOf(true) }
-
+    val toast = XCToast(context)
     LazyColumnScrollbar(
         state = state,
         settings = ScrollbarSettings(
@@ -145,11 +146,16 @@ fun LocalPlaylistView(
                             if (!isSelecting) playlistVM.selectSong(
                                 song.data, songsInPL.songs.map { it.data }, name
                             )
-                            else playlistVM.toggleSong(song.data.id)
+                            else {
+                                val limitReached = playlistVM.toggleSong(song.data.id)
+                                if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
+                            }
                         }, enabled = !alIsLoading,
                         onLongPress = {
-                            if (isSelecting) playlistVM.toggleSong(song.data.id)
-                            else playlistVM.startSelecting(song.data.id)
+                            if (isSelecting) {
+                                val limitReached = playlistVM.toggleSong(song.data.id)
+                                if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
+                            } else playlistVM.startSelecting(song.data.id)
                         },
                         onDelete = {
                             coroutineScope.launch {
@@ -158,9 +164,13 @@ fun LocalPlaylistView(
                                     playlistId = songsInPL.playlist.name
                                 )
                             }
-                        }, context = LocalContext.current, isPickedSong = currentId == id ,
+                        }, context = LocalContext.current, isPickedSong = currentId == id,
                         onEdit = { onEditSong(song.data.uri.toString()) },
                         onAdd = { onAdd(song.data.id) },
+                        onEnqueue = {
+                            val result = playlistVM.addToQueue(listOf(song.data))
+                            if (result) toast.makeMessage("Song already in queue")
+                        },
                         onUpsertLyrics = { showDialog = Pair(true, song.data.uri.toString()) }
                     )
                 }
@@ -175,13 +185,21 @@ fun LocalPlaylistView(
                 onClick = { audio ->
                     if (!isSelecting) playlistVM.selectSong(
                         audio, songsInPL.songs.map { it.data }, name
-                    )
-                    else playlistVM.toggleSong(audio.id)
+                    ) else {
+                        val limitReached = playlistVM.toggleSong(audio.id)
+                        if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
+                    }
                 },
-                onDelete = {}, onEdit = {}, onAdd = onAdd,currentId = currentId,
+                onEnqueue = {
+                    val result = playlistVM.addToQueue(listOf(it))
+                    if (result) toast.makeMessage("Song already in queue")
+                },
+                onDelete = {}, onEdit = {}, onAdd = onAdd, currentId = currentId,
                 onLongPress = {
-                    if (isSelecting) playlistVM.toggleSong(it)
-                    else playlistVM.startSelecting(it)
+                    if (isSelecting) {
+                        val limitReached = playlistVM.toggleSong(it)
+                        if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
+                    } else playlistVM.startSelecting(it)
                 }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                 onUpsertLyrics = { showDialog = Pair(true, it) }
             )

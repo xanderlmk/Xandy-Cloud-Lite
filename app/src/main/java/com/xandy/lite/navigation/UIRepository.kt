@@ -26,12 +26,13 @@ interface UIRepository {
     val recentQueries: Flow<Set<String>>
     val isSearching: StateFlow<Boolean>
     fun updateQuery(new: String)
-    fun startAdding(pickedSL: List<AudioFile>)
+    fun startAdding()
     fun startSelectingSongs(songId: String)
+
     /** End the selection, clear the list, and stop adding (if adding) */
     fun endSelect()
 
-    fun toggleSong(songId: String)
+    fun toggleSong(songId: String): Boolean
     fun selectAll(list: List<String>)
 
     fun turnOnSearch()
@@ -67,9 +68,9 @@ class UIRepositoryImpl(private val context: Context) : UIRepository {
     override fun updateQuery(new: String) = _query.update { new }
 
 
-    override fun startAdding(pickedSL: List<AudioFile>) {
+    override fun startAdding() {
         _isSelecting.update { true }; _isAdding.update { true }
-        _selectedSongIds.update { pickedSL.map { it.id } }
+        _selectedSongIds.update {emptyList() }
     }
 
     override fun startSelectingSongs(songId: String) {
@@ -81,11 +82,22 @@ class UIRepositoryImpl(private val context: Context) : UIRepository {
         _isAdding.update { false }
     }
 
-    override fun toggleSong(songId: String) = _selectedSongIds.update { ids ->
-        val mutableIds = ids.toMutableList()
-        if (!mutableIds.contains(songId)) mutableIds.add(songId)
-        else mutableIds.remove(songId)
-        mutableIds
+    /**
+     * If the limit has been reached, the user won't be allowed to add more songs.
+     * Returns true if limit was reached
+     */
+    override fun toggleSong(songId: String): Boolean {
+        var limitReached = false
+        _selectedSongIds.update { ids ->
+            val mutableIds = ids.toMutableList()
+            if (!mutableIds.contains(songId)) {
+                if ((mutableIds.size + 1) > 2_000)
+                    limitReached = true
+                else mutableIds.add(songId)
+            } else mutableIds.remove(songId)
+            mutableIds
+        }
+        return limitReached
     }
 
     override fun selectAll(list: List<String>) = _selectedSongIds.update { list }
@@ -133,8 +145,7 @@ class UIRepositoryImpl(private val context: Context) : UIRepository {
                     if (reversed.size >= 5) {
                         reversed.add(s)
                         reversed.removeAt(0)
-                    }
-                    else reversed.add(s)
+                    } else reversed.add(s)
                     reversed.reversed().toSet()
                 }
             }

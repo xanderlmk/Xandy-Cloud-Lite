@@ -1,5 +1,6 @@
 package com.xandy.lite.views.picked.song
 
+import android.util.Log
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.media3.session.MediaController
 import com.xandy.lite.R
 import com.xandy.lite.controllers.view.models.PickedSongVM
 import com.xandy.lite.db.tables.toAudioFile
+import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.ui.PickedSongVMStates
 import com.xandy.lite.models.ui.SongToggle
 import com.xandy.lite.models.ui.drawableResUri
@@ -40,7 +42,7 @@ import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.QueueRow
 import com.xandy.lite.ui.functions.item.details.SongRow
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import com.xandy.lite.views.player.controller.PlayerButtons
 
 
@@ -84,16 +86,28 @@ fun VerticalSongView(
                         modifier = thisModifier,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        items(states.sortedQueue) { item ->
+                        items(states.sortedQueue, key = { it.mediaItem.itemKey() }) { item ->
                             val isPicked = states.song?.id == item.mediaItem.itemKey()
                             SongRow(
                                 item.mediaItem.toAudioFile(unknownTrackUri), getUIStyle,
                                 isPicked, LocalContext.current
                             ) {
+//                                Log.i(XANDY_CLOUD, "ITEM: ${item.mediaItem.mediaMetadata.title}")
                                 val index =
-                                    states.unsortedQueue.indexOf(item).takeIf { it >= 0 }
-                                        ?: return@SongRow
+                                    states.unsortedQueue.indexOfFirst {
+                                        item.mediaItem.itemKey() == it.mediaItem.itemKey()
+                                    }.takeIf { idx -> idx >= 0 } ?: return@SongRow
+//                                Log.i(
+//                                    XANDY_CLOUD,
+//                                    "UNSORTED ITEM[$index] ${states.unsortedQueue[index].mediaItem.mediaMetadata.title}"
+//                                )
+//                                Log.i(
+//                                    XANDY_CLOUD,
+//                                    "SORTED ITEM[$index] ${states.sortedQueue[index].mediaItem.mediaMetadata.title}"
+//                                )
+
                                 controller.seekTo(index, 0)
+//                                Log.i(XANDY_CLOUD, "NEW ITEM ${controller.mediaMetadata.title}")
                                 if (!states.isPlaying) controller.play()
                             }
                         }
@@ -137,7 +151,7 @@ fun VerticalSongView(
             }
 
             is SongToggle.Lyrics -> {
-                SongLyrics(states.song, position, getUIStyle,thisModifier)
+                SongLyrics(states.song, position, getUIStyle, thisModifier)
             }
         }
 

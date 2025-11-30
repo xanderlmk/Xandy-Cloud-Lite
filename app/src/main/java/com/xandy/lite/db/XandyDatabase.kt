@@ -16,11 +16,13 @@ import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.db.tables.PlaylistSongOrder
 import com.xandy.lite.db.tables.PLSongCrossRef
 import com.xandy.lite.db.tables.Playlist
+import com.xandy.lite.models.MIGRATION_10_11
 import com.xandy.lite.models.MIGRATION_1_2
 import com.xandy.lite.models.MIGRATION_2_3
 import com.xandy.lite.models.MIGRATION_5_6
 import com.xandy.lite.models.MIGRATION_7_8
 import com.xandy.lite.models.MIGRATION_8_9
+import com.xandy.lite.models.MIGRATION_9_10
 import kotlinx.coroutines.CoroutineScope
 
 
@@ -29,7 +31,7 @@ import kotlinx.coroutines.CoroutineScope
     entities = [
         AudioFile::class, Playlist::class, PLSongCrossRef::class, Bucket::class,
         PlaylistSongOrder::class, Lyrics::class, AudioHistory::class
-    ], version = 9, exportSchema = true,
+    ], version = 11, exportSchema = true,
     autoMigrations = [AutoMigration(3,4), AutoMigration(4,5), AutoMigration(6,7)]
 )
 @TypeConverters(
@@ -50,7 +52,7 @@ abstract class XandyDatabase : RoomDatabase() {
                     Room.databaseBuilder(context, XandyDatabase::class.java, "xandy_lite_database")
                         .addMigrations(
                             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_5_6, MIGRATION_7_8,
-                            MIGRATION_8_9
+                            MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11
                         )
                         .fallbackToDestructiveMigration(false)
                         .build().also { Instance = it }

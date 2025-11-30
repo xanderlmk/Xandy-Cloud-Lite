@@ -48,36 +48,15 @@ fun PlayerButtons(
                     Player.REPEAT_MODE_ALL -> repeatAll
                     else -> repeatOff
                 },
-                cd = "Repeat Mode", modifier = iconSize
+                contentDescription = "Repeat Mode", modifier = iconSize
             )
         }
         IconButton(onClick = {
-            val position = controller.currentPosition
-            val queueSize = controller.mediaItemCount
-            val currentIndex = controller.currentMediaItemIndex
-            if (states.repeatMode == Player.REPEAT_MODE_OFF ||
-                states.repeatMode == Player.REPEAT_MODE_ONE
-            ) {
-                if (position > 5_000) {
-                    controller.seekTo(0)
-                } else {
-                    if (currentIndex == 0) {
-                        controller.seekToDefaultPosition(queueSize - 1)
-                    } else {
-                        controller.seekToPrevious()
-                    }
-                }
-            } else {
-                if (position > 5_000) {
-                    controller.seekTo(0)
-                } else {
-                    controller.seekToPrevious()
-                }
-            }
+           handleSkipPrevious(states.repeatMode, controller)
         }) {
             ci.ContentIcon(
                 painterResource(R.drawable.baseline_skip_previous),
-                cd = "Prev", modifier = iconSize
+                contentDescription = "Prev", modifier = iconSize
             )
         }
         if (states.isLoading) {
@@ -87,38 +66,26 @@ fun PlayerButtons(
                 IconButton(onClick = { controller.pause() }) {
                     ci.ContentIcon(
                         painterResource(R.drawable.baseline_pause),
-                        cd = "Pause", modifier = iconSize
+                        contentDescription = "Pause", modifier = iconSize
                     )
                 }
             } else {
                 IconButton(onClick = { controller.play() }) {
                     ci.ContentIcon(
                         Icons.Default.PlayArrow,
-                        cd = "Play", modifier = iconSize
+                        contentDescription = "Play", modifier = iconSize
                     )
                 }
             }
         }
 
         IconButton(onClick = {
-            if (states.repeatMode == Player.REPEAT_MODE_OFF ||
-                states.repeatMode == Player.REPEAT_MODE_ONE
-            ) {
-                val queueSize = controller.mediaItemCount
-                val currentIndex = controller.currentMediaItemIndex
-                if (currentIndex == (queueSize - 1) || queueSize == 0) {
-                    controller.seekToDefaultPosition(0)
-                } else {
-                    controller.seekToNext()
-                }
-            } else {
-                controller.seekToNext()
-            }
+           handleSkipNext(states.shuffleMode, states.repeatMode, controller)
         }
         ) {
             ci.ContentIcon(
                 painterResource(R.drawable.baseline_skip_next),
-                cd = "Next", modifier = iconSize
+                contentDescription = "Next", modifier = iconSize
             )
         }
         IconButton(onClick = {
@@ -129,8 +96,45 @@ fun PlayerButtons(
             ci.ContentIcon(
                 if (states.shuffleMode) painterResource(AndroidR.drawable.media3_icon_shuffle_on)
                 else painterResource(AndroidR.drawable.media3_icon_shuffle_off),
-                cd = "Shuffle", modifier = iconSize
+                contentDescription = "Shuffle", modifier = iconSize
             )
         }
+    }
+}
+
+private fun handleSkipPrevious(repeatMode: Int, mc: MediaController) {
+    val pos = mc.currentPosition
+    if (repeatMode == Player.REPEAT_MODE_OFF || repeatMode == Player.REPEAT_MODE_ONE) {
+        if (pos > 5_000) {
+            mc.seekTo(0)
+        } else {
+            if (!mc.hasPreviousMediaItem())
+                mc.seekToDefaultPosition(mc.mediaItemCount - 1)
+            else mc.seekToPrevious()
+        }
+    } else {
+        // REPEAT_MODE_ALL
+        if (pos > 5_000) mc.seekTo(0) else mc.seekToPrevious()
+    }
+}
+
+private fun handleSkipNext(
+    shuffleEnabled: Boolean, repeatMode: Int, mc: MediaController
+) {
+    if (repeatMode == Player.REPEAT_MODE_OFF || repeatMode == Player.REPEAT_MODE_ONE) {
+        if (!mc.hasNextMediaItem()) {
+            if (shuffleEnabled) {
+                val songCount = mc.mediaItemCount.takeIf { it > 0 } ?: return
+                val index = (0 until songCount).random().takeIf {
+                    it != mc.currentMediaItemIndex
+                } ?: 0
+                mc.seekToDefaultPosition(index)
+            } else mc.seekToDefaultPosition(0)
+        } else {
+            mc.seekToNext()
+        }
+    } else {
+        // REPEAT_MODE_ALL
+        mc.seekToNext()
     }
 }

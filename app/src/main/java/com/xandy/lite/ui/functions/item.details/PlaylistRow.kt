@@ -45,7 +45,7 @@ import com.xandy.lite.models.ui.order.by.SongOrder
 import com.xandy.lite.models.ui.order.by.reverseSort
 import com.xandy.lite.models.ui.order.by.toOrderedByClass
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import androidx.media3.session.R as AndroidR
 
 

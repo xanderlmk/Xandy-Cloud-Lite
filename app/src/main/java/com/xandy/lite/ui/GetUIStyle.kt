@@ -1,19 +1,17 @@
-package com.xandy.lite.ui.theme
+package com.xandy.lite.ui
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import com.xandy.lite.models.Theme
 import com.xandy.lite.models.application.PrefRepository
+import com.xandy.lite.models.media.player.LoadControl
+import com.xandy.lite.models.media.player.PlayerControls
 
 @Suppress("unused")
 class GetUIStyle(
     private val cS: ColorScheme, private val isDarkTheme: Boolean,
-    private val isDynamicTheme: Boolean, private val prefRepository: PrefRepository
+    private val isDynamicTheme: Boolean
 ) {
-    suspend fun changeTheme(theme: Theme) = prefRepository.changeTheme(theme)
-    suspend fun toggleOffloadingEnabled(isOn: Boolean) = prefRepository.toggleOffloading(isOn)
-    fun getAppTheme() = prefRepository.theme
-    fun getOffloadingEnabled() = prefRepository.offloadingEnabled
     fun getIsDarkTheme() = isDarkTheme
     fun floatingPlayerBackground(): Color =
         if (isDarkTheme) Color(33, 40, 40, 255)
@@ -31,14 +29,16 @@ class GetUIStyle(
         if (isSelected) activeTabColor() else inactiveTabColor()
 
     fun tabTextColor(isSelected: Boolean): Color =
-        if (isDarkTheme) if (isSelected) Color.White else Color.Gray
-        else if (isSelected) Color.Black else Color.DarkGray
+        if (isDarkTheme) if (isSelected) Color.Companion.White else Color.Companion.Gray
+        else if (isSelected) Color.Companion.Black else Color.Companion.DarkGray
 
     fun topBarColor(): Color =
         if (isDarkTheme) Color(12, 11, 24, 255)
         else Color(162, 169, 253, 255)
 
-    fun themedOnContainerColor(): Color = if (isDarkTheme) Color.White else Color.Black
+    fun themedOnContainerColor(): Color =
+        if (isDarkTheme) Color.Companion.White else Color.Companion.Black
+
     fun altThemedColor(): Color =
         if (isDarkTheme) Color(183, 116, 201, 255)
         else Color(73, 4, 119, 255)

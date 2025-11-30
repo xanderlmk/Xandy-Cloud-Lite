@@ -21,13 +21,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xandy.lite.controllers.view.models.LocalArtistVM
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.models.XCToast
 import com.xandy.lite.models.ui.Artist
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.LyricsListDialog
 import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.PlayOptions
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import kotlinx.coroutines.launch
 
 
@@ -66,6 +67,7 @@ fun LocalArtistView(
     val lyricsList by vm.lyricsList.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val toast = XCToast(context)
     SongLazyColumn(
         list = filtered, enabled = enabled, getUIStyle = getUIStyle, isSelecting = isSelecting,
         onClick = { audio ->
@@ -81,6 +83,10 @@ fun LocalArtistView(
             .fillMaxWidth()
             .padding(top = 4.dp), selectedSongSet = selectedSongSet,
         onUpsertLyrics = { showDialog = Pair(true, it) },
+        onEnqueue = {
+            val result = vm.addToQueue(listOf(it))
+            if (result) toast.makeMessage("Song already in queue")
+        },
         topContent = {
             item {
                 Artwork(artist.picture, LocalContext.current, pictureModifier)

@@ -8,12 +8,16 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.graphics.scale
 import androidx.core.net.toUri
+import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.AudioWithPls
 import com.xandy.lite.db.tables.BucketWithAudio
+import com.xandy.lite.db.tables.LyricLine
+import com.xandy.lite.db.tables.Lyrics
+import com.xandy.lite.db.tables.toMediaItems
 import com.xandy.lite.db.tables.toMediaItemsWithCreatedOn
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.itemKey
@@ -38,6 +42,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Date
@@ -170,12 +175,41 @@ private fun combineSongWithMediaMetadata(
     val artist = af?.song?.artist ?: item?.artist ?: "Unknown Artist"
     val album = af?.song?.album ?: item?.albumTitle
     val artwork = af?.song?.picture ?: item?.artworkUri ?: unknownTrackUri
-   // Log.i(XANDY_CLOUD, "${af?.lyrics}")
-
+    // Log.i(XANDY_CLOUD, "${af?.lyrics}")
     return SongDetails(
-        id, title.toString(), artist.toString(), album?.toString(), artwork, af?.lyrics
+        id, title.toString(), artist.toString(), album?.toString(), artwork,
+        af?.lyrics?.refineScroll()
     )
 }
+
+private fun Lyrics.refineScroll() = this.copy(scroll = scroll.insertGapPlaceholders())
+
+private fun Set<LyricLine>?.insertGapPlaceholders(thresholdMs: Long = 1_000L): Set<LyricLine> {
+    val sorted = this?.sortedBy { it.range.first } ?: return emptySet()
+    if (sorted.isEmpty()) return emptySet()
+
+    val out = ArrayList<LyricLine>(sorted.size * 2)
+    for (i in sorted.indices) {
+        val curr = sorted[i]
+        out.add(curr)
+
+        val next = sorted.getOrNull(i + 1) ?: continue
+
+        val gapStart = curr.range.last + 1
+        val gapEnd = next.range.first - 1
+
+        if (gapStart <= gapEnd) {
+            val gapLength = (gapEnd - gapStart + 1)
+            if (gapLength >= thresholdMs) {
+                // create a transient placeholder LyricLine; not saved to DB
+                val placeholder = LyricLine(LongRange(gapStart, gapEnd), "$;12345$")
+                out.add(placeholder)
+            }
+        }
+    }
+    return out.toSet()
+}
+
 
 fun combinePickedUUIDWithPl(
     name: Flow<String>, localPlaylists: Flow<LocalPlUIState>
@@ -214,7 +248,7 @@ fun combinePickedNameWithLocalArtist(
 
 /** Sorted queue */
 fun combineQueueMediaItems(
-    queue: StateFlow<List<String>>,
+    queue: Flow<List<String>>,
     allMediaItems: Flow<List<MediaItemWithCreatedOn>>, queueOrder: StateFlow<OrderQueueBy>
 ) = combine(queue, allMediaItems, queueOrder) { queueIds, items, order ->
     val itemsByKey = items.associateBy { it.mediaItem.itemKey() }
@@ -223,13 +257,13 @@ fun combineQueueMediaItems(
 
 /** Unsorted queue */
 fun combineQueueMediaItems(
-    queue: StateFlow<List<String>>, allMediaItems: Flow<List<MediaItemWithCreatedOn>>
+    queue: Flow<List<String>>, allMediaItems: Flow<List<MediaItemWithCreatedOn>>
 ) = combine(queue, allMediaItems) { queueIds, items ->
     val itemsByKey = items.associateBy { it.mediaItem.itemKey() }
     queueIds.mapNotNull { id -> itemsByKey[id] }
 }
 
-/** combine all audio, remote songs, and hidden songs into one list */
+/** combine all audio and hidden songs into one list */
 fun combineAllMediaItems(
     audioFiles: Flow<AudioUIState>, hiddenAudio: Flow<List<AudioFile>>
 ) = combine(audioFiles, hiddenAudio) { shown, hidden ->
@@ -260,3 +294,24 @@ fun getQueueOrderedBy(
     initialValue = order.value.isAscending()
 )
 
+
+object Controller {
+    fun addToQueue(
+        mediaController: MediaController?, list: List<AudioFile>,
+        currentQueue: List<MediaItemWithCreatedOn>, onAddToQueue: (List<String>) -> Unit
+    ): Boolean = mediaController?.let { controller ->
+        var exists = false
+        val idSet = currentQueue.map { it.mediaItem.itemKey() }.toSet()
+        val newItems = list.mapNotNull {
+            if (it.id in idSet) {
+                exists = true
+                null
+            } else it
+        }
+        val mediaItems = newItems.toMediaItems()
+        val newQueueIds = idSet.toList() + newItems.map { it.id }
+        controller.addMediaItems(mediaItems)
+        onAddToQueue(newQueueIds)
+        return@let exists
+    } ?: false
+}

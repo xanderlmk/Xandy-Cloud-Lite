@@ -21,7 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xandy.lite.models.ui.Artist
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 @Composable
 fun ArtistRow(artist: Artist, getUIStyle: GetUIStyle, onClick: () -> Unit) {

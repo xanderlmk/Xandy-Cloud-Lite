@@ -32,7 +32,7 @@
                 android:resource="@xml/file_provider" />
         </provider>
         <service
-            android:name=".models.PlaybackService"
+            android:name=".models.media.player.PlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>

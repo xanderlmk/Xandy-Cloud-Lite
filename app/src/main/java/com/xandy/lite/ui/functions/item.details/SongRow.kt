@@ -52,15 +52,15 @@ import com.xandy.lite.controllers.shareSingleAudio
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.isNotInternal
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 
 @Composable
 fun SongRow(
     song: AudioFile, getUIStyle: GetUIStyle, onClick: () -> Unit, onLongPress: () -> Unit,
     onDelete: () -> Unit, onEdit: () -> Unit, onToggleHide: () -> Unit = {}, onAdd: () -> Unit,
-    isSelecting: Boolean, isSelected: Boolean, enabled: Boolean, context: Context,
-    isPickedSong: Boolean,
+    onEnqueue: () -> Unit, isSelecting: Boolean, isSelected: Boolean, enabled: Boolean,
+    context: Context, isPickedSong: Boolean,
     onUpsertLyrics: () -> Unit, hideAllowed: Pair<Boolean, String> = Pair(false, "")
 ) {
     val ci = ContentIcons(getUIStyle)
@@ -131,7 +131,14 @@ fun SongRow(
                             onClick = { expanded = false; onAdd() }
                         )
                         DropdownMenuItem(
-                            text = { Text("Edit Lyrics") },
+                            text = { Text("Enqueue") },
+                            trailingIcon = {
+                                ci.ContentIcon(painterResource(R.drawable.baseline_add_to_queue))
+                            },
+                            onClick = { expanded = false; onEnqueue() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Add Lyrics") },
                             trailingIcon = {
                                 ci.ContentIcon(painterResource(R.drawable.baseline_lyrics))
                             },

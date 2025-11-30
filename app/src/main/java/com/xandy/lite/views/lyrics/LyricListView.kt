@@ -1,6 +1,7 @@
 package com.xandy.lite.views.lyrics
 
 import android.net.Uri
+import android.os.Parcelable
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,34 +32,47 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xandy.lite.controllers.view.models.LyricsVM
 import com.xandy.lite.db.tables.Lyrics
-import com.xandy.lite.models.LyricsXclfAdapter
+import com.xandy.lite.models.lyrics.adapter.LyricsXclfAdapter
 import com.xandy.lite.models.XCToast
 import com.xandy.lite.models.application.AppVMProvider
+import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.ellipsize
+import com.xandy.lite.models.lyrics.adapter.ExportResult
 import com.xandy.lite.models.ui.InsertResult
 import com.xandy.lite.ui.functions.DeleteModal
 import com.xandy.lite.ui.functions.ExportLyricDialog
 import com.xandy.lite.ui.functions.OverwriteItem
 import com.xandy.lite.ui.functions.SmallAddButton
 import com.xandy.lite.ui.functions.item.details.LyricsRow
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.parcelize.Parcelize
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import my.nanihadesuka.compose.LazyColumnScrollbar
 
+
+@Parcelize
+@Serializable
+private data class Pair(
+    @SerialName(value = "Xandy-Cloud.Full.Lyrics")
+    val l : Lyrics?, val b: Boolean
+): Parcelable
+
 @Composable
-fun LyricsListView(getUIStyle: GetUIStyle) {
+fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
     val lyricsVM: LyricsVM = viewModel(factory = AppVMProvider.Factory)
     val allLyrics by lyricsVM.lyricsList.collectAsStateWithLifecycle()
     val state = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var enabled by rememberSaveable { mutableStateOf(true) }
-    var showModal by rememberSaveable { mutableStateOf<Pair<Lyrics?, Boolean>>(Pair(null, false)) }
+    var showModal by rememberSaveable { mutableStateOf(Pair(null, false)) }
     var showExportDialog by rememberSaveable {
-        mutableStateOf<Pair<Lyrics?, Boolean>>(Pair(null, false))
+        mutableStateOf(Pair(null, false))
     }
     var showImportDialog by rememberSaveable {
-        mutableStateOf<Pair<Lyrics?, Boolean>>(Pair(null, false))
+        mutableStateOf(Pair(null, false))
     }
     val context = LocalContext.current
     val toast = XCToast(context)
@@ -121,7 +135,7 @@ fun LyricsListView(getUIStyle: GetUIStyle) {
                 items(allLyrics, key = { it.lyrics.id }) { l ->
                     LyricsRow(
                         l, getUIStyle = getUIStyle,
-                        onEdit = {},
+                        onEdit = { onEdit(l.lyrics.id) },
                         onExport = { showExportDialog = Pair(l.lyrics, true) },
                         onDelete = { showModal = Pair(l.lyrics, true) }
                     )
@@ -147,7 +161,7 @@ fun LyricsListView(getUIStyle: GetUIStyle) {
                         expanded = expanded, onDismissRequest = { expanded = false },
                     ) {
                         DropdownMenuItem(
-                            onClick = {},
+                            onClick = { expanded = false; onEdit("") },
                             text = { Text("Create") })
                         DropdownMenuItem(
                             onClick = { launcher.launch(arrayOf("application/octet-stream")) },
@@ -159,13 +173,13 @@ fun LyricsListView(getUIStyle: GetUIStyle) {
             }
         }
 
-        if (showModal.second) {
+        if (showModal.b) {
             DeleteModal(
                 onDismissRequest = { if (enabled) showModal = Pair(null, false) },
                 onDelete = {
                     coroutineScope.launch {
                         enabled = false
-                        val lyrics = showModal.first
+                        val lyrics = showModal.l
                         if (lyrics == null) {
                             toast.makeMessage("Null lyrics"); onFinish()
                             return@launch
@@ -176,36 +190,84 @@ fun LyricsListView(getUIStyle: GetUIStyle) {
                         onFinish()
                     }
                 },
-                string = (showModal.first?.description ?: showModal.first?.plain)?.ellipsize()
+                string = (showModal.l?.description ?: showModal.l?.plain)?.ellipsize()
             )
         }
-        if (showExportDialog.second) {
+        if (showExportDialog.b) {
+            var submitButtonText by rememberSaveable { mutableStateOf("Export") }
+            var exists by rememberSaveable { mutableStateOf(false) }
             ExportLyricDialog(
                 onDismiss = { if (enabled) showExportDialog = Pair(null, false) },
                 onSubmit = {
                     coroutineScope.launch {
                         enabled = false
-                        val lyrics = showExportDialog.first
+                        val lyrics = showExportDialog.l
                         if (lyrics == null) {
                             toast.makeMessage("Null lyrics"); onFinish()
                             return@launch
                         }
                         val result = LyricsXclfAdapter.exportLyricsToXclf(it, lyrics, context)
-                        if (result == null) toast.makeMessage("Unable to export file")
-                        else toast.makeMessage("Exported file, Uri = ${result.path}")
+                        when (val r = result) {
+                            ExportResult.Exists -> {
+                                Log.w(XANDY_CLOUD, "File already exist.")
+                                submitButtonText = "Create New"
+                                exists = true; enabled = true
+                            }
+
+                            ExportResult.Failed -> {
+                                toast.makeMessage("Unable to get save file")
+                                onFinish()
+                            }
+
+                            is ExportResult.Success -> {
+                                if (r.uri == null) toast.makeMessage("Unable to get file path")
+                                else toast.makeMessage("Exported file, path = ${r.uri.path}")
+                                onFinish()
+                            }
+                        }
+                    }
+                },
+                onCreateNew = {
+                    coroutineScope.launch {
+                        enabled = false
+                        val lyrics = showExportDialog.l
+                        if (lyrics == null) {
+                            toast.makeMessage("Null lyrics"); onFinish()
+                            return@launch
+                        }
+                        val result = LyricsXclfAdapter.exportNewLyricsToXclf(it, lyrics, context)
+                        if (result == null) toast.makeMessage("Unable to get save file or get path")
+                        else toast.makeMessage("Exported file, path = ${result.path}")
                         onFinish()
                     }
                 },
+                onReplace = {
+                    coroutineScope.launch {
+                        enabled = false
+                        val lyrics = showExportDialog.l
+                        if (lyrics == null) {
+                            toast.makeMessage("Null lyrics"); onFinish()
+                            return@launch
+                        }
+                        val name = "${it ?: lyrics.id}.xclf"
+                        val result =
+                            LyricsXclfAdapter.exportOverwrittenLyrics(name, lyrics, context)
+                        if (result == null) toast.makeMessage("Unable to get save file or get path")
+                        else toast.makeMessage("Exported file, path = ${result.path}")
+                        onFinish()
+                    }
+                },
+                submitButtonText = { submitButtonText }, exists = { exists },
                 getUIStyle = getUIStyle, enabled = enabled
             )
         }
-        if (showImportDialog.second) {
+        if (showImportDialog.b) {
             OverwriteItem(
                 onDismiss = { if (enabled) showImportDialog = Pair(null, false) },
                 onSubmit = {
                     coroutineScope.launch {
                         enabled = false
-                        val lyrics = showImportDialog.first
+                        val lyrics = showImportDialog.l
                         if (lyrics == null) {
                             toast.makeMessage("Null lyrics"); onFinish()
                             return@launch

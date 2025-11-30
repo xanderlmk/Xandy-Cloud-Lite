@@ -27,13 +27,13 @@ import com.xandy.lite.ui.functions.LyricsListDialog
 import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.PlayOptions
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import kotlinx.coroutines.launch
 
 
 @Composable
 fun LocalAlbumView(
-    album: Album,currentId: String, modifier: Modifier, enabled: Boolean, getUIStyle: GetUIStyle,
+    album: Album, currentId: String, modifier: Modifier, enabled: Boolean, getUIStyle: GetUIStyle,
     onDelete: (AudioFile) -> Unit, onAdd: (String) -> Unit, onEdit: (String) -> Unit,
     onEnabled: (Boolean) -> Unit,
     vm: LocalAlbumVM
@@ -84,6 +84,10 @@ fun LocalAlbumView(
             .fillMaxWidth()
             .padding(top = 4.dp), selectedSongSet = selectedSongSet,
         onUpsertLyrics = { showDialog = Pair(true, it) },
+        onEnqueue = {
+            val result = vm.addToQueue(listOf(it))
+            if (result) toast.makeMessage("Song already in queue")
+        },
         topContent = {
             item {
                 Artwork(album.picture, LocalContext.current, pictureModifier)

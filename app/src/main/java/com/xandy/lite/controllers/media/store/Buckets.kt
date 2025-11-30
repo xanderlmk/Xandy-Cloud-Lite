@@ -9,7 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 
-fun loadBuckets(context: Context): List<Bucket> {
+suspend fun loadBuckets(context: Context): List<Bucket> = withContext(Dispatchers.IO) {
     val buckets = mutableListOf<Bucket>()
     val projection = arrayOf(
         MediaStore.Audio.Media.VOLUME_NAME,
@@ -22,7 +22,6 @@ fun loadBuckets(context: Context): List<Bucket> {
     } else {
         listOf("external", "internal")
     }
-
     for (volume in volumes) {
         val uri = MediaStore.Audio.Media
             .getContentUri(volume)
@@ -47,5 +46,5 @@ fun loadBuckets(context: Context): List<Bucket> {
                 }
             }
     }
-    return buckets.distinctBy { it.volumeName to it.id }
+    return@withContext buckets.distinctBy { it.volumeName to it.id }
 }

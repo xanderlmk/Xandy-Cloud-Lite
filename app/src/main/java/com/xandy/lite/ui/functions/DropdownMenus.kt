@@ -44,7 +44,7 @@ import com.xandy.lite.models.ui.LocalMusicTabs
 import com.xandy.lite.models.ui.order.by.PlaylistOrder
 import com.xandy.lite.models.ui.order.by.SongOrder
 import com.xandy.lite.navigation.NavViewModel
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import kotlinx.coroutines.launch
 
 
@@ -62,11 +62,9 @@ fun LocalAudioOptions(
     if (!audioStates.isSearching) {
         SearchIconButton(ci) { onSearch() }
         if (!audioStates.isSelecting) {
-            ci.PercentRefreshButon(
-                audioStates.isLoading,
-                percentage = audioStates.percent,
-                onClick = onRefresh,
-                getUIStyle.themedOnContainerColor()
+            ci.RefreshButton(
+                audioStates.isLoading, isGettingPics = audioStates.gettingPics,
+                onClick = onRefresh, getUIStyle.themedOnContainerColor()
             )
         }
     }
@@ -160,9 +158,8 @@ fun PlayListOptions(
                 )
 
             }
-        }, onAdd = {
-            plWithAudio?.let { navVM.startAdding(it.songs.map { song -> song.data }) }
-        }, isSelecting = isSelecting, isAdding = isAdding,
+        }, onAdd = { plWithAudio?.let { navVM.startAdding() } },
+        isSelecting = isSelecting, isAdding = isAdding,
         onChangeArt = onChangeArt, onChangeName = onChangeName
     )
 }

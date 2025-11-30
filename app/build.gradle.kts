@@ -17,8 +17,8 @@ android {
         applicationId = "com.xandy.lite"
         minSdk = 26
         targetSdk = 36
-        versionCode = 23
-        versionName = "1.1.121"
+        versionCode = 52
+        versionName = "1.1.300"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { this.debugSymbolLevel = "SYMBOL_TABLE" }
         buildConfigField(

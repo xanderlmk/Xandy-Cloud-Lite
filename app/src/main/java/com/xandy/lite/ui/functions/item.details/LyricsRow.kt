@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.xandy.lite.R
 import com.xandy.lite.db.tables.LyricsWithAudio
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 @Composable
 fun LyricsRow(l: LyricsWithAudio, getUIStyle: GetUIStyle, onClick: () -> Unit) {

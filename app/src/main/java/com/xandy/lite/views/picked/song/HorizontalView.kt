@@ -41,7 +41,7 @@ import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.QueueRow
 import com.xandy.lite.ui.functions.item.details.SongRow
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import com.xandy.lite.views.player.controller.PlayerButtons
 
 
@@ -125,15 +125,16 @@ fun HorizontalSongView(
                             .zIndex(-1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        items(states.sortedQueue) { item ->
+                        items(states.sortedQueue, key = { it.mediaItem.itemKey() }) { item ->
                             val isPicked = states.song?.id == item.mediaItem.itemKey()
                             SongRow(
                                 item.mediaItem.toAudioFile(unknownTrackUri), getUIStyle,
                                 isPicked, LocalContext.current
                             ) {
                                 val index =
-                                    states.unsortedQueue.indexOf(item).takeIf { it >= 0 }
-                                        ?: return@SongRow
+                                    states.unsortedQueue.indexOfFirst {
+                                        item.mediaItem.itemKey() == it.mediaItem.itemKey()
+                                    }.takeIf { idx -> idx >= 0 } ?: return@SongRow
                                 controller.seekTo(index, 0)
                                 if (!states.isPlaying) controller.play()
                             }

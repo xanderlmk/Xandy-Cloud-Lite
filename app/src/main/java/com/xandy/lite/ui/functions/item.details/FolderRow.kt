@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.sp
 import com.xandy.lite.R
 import com.xandy.lite.db.tables.Bucket
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 
 @Composable

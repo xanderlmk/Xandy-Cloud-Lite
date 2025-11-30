@@ -27,12 +27,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xandy.lite.R
 import com.xandy.lite.models.Theme
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.models.application.PreferencesManager
+import com.xandy.lite.ui.GetUIStyle
 
 @Composable
-fun ThemeSettings(getUIStyle: GetUIStyle, onChangeTheme: (Theme) -> Unit) {
+fun ThemeSettings(
+    getUIStyle: GetUIStyle, pm: PreferencesManager, onChangeTheme: (Theme) -> Unit
+) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val theme by getUIStyle.getAppTheme().collectAsStateWithLifecycle()
+    val theme by pm.theme.collectAsStateWithLifecycle()
     Box(
         Modifier
             .fillMaxWidth()

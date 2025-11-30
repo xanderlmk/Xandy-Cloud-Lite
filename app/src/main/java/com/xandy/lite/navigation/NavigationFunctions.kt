@@ -35,7 +35,7 @@ import com.xandy.lite.models.ui.ShowModalFor
 import com.xandy.lite.ui.functions.DeleteModal
 import com.xandy.lite.ui.functions.SelectImageModal
 import com.xandy.lite.ui.functions.item.details.Artwork
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import my.nanihadesuka.compose.LazyColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
 

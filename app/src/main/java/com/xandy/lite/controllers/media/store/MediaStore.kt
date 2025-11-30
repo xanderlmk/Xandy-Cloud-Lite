@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
+import androidx.compose.runtime.MutableIntState
 import androidx.core.content.FileProvider
 import androidx.core.database.getIntOrNull
 import kotlinx.coroutines.Dispatchers
@@ -29,17 +30,34 @@ import java.util.Date
 import java.util.UUID
 
 
+/**
+ * @param albumId Album id
+ * @param displayName The Display name of the audio file
+ * @param year The year of the audio file
+ * @param duration Duration of the audio
+ * @param contentUri The uri of the file
+ * @param dateAddedMs Dated song was added in Milliseconds
+ * @param bucketId Bucket id that the file belongs to
+ * @param volumeName The volume name of the bucket
+ */
 private data class MediaRow(
-    val id: Long, val albumId: Long,
-    val displayName: String, val year: Int?,
+    val id: Long, val albumId: Long, val displayName: String, val year: Int?,
     val duration: Long, val contentUri: Uri,
-    val dateAddedMs: Long, val albumArtUri: Uri?,
-    val bucketId: Long, val volumeName: String,
+    val dateAddedMs: Long, val dateModifiedMs: Long, val bucketId: Long, val volumeName: String,
 )
 
-private fun queryMediaRows(
-    context: Context, volumes: List<String>, chunkSize: Int, onCalculateTotal: (Int) -> Unit
-): Flow<List<MediaRow>> = flow {
+data class MediaRowPicture(
+    val contentUri: Uri, val albumId: Long
+)
+
+data class ImportedAudioDetails(
+    val audio: AudioFile, val mrp: MediaRowPicture,
+    val songIdNotNull: Boolean, val modified: Boolean
+)
+
+private fun queryMediaRows(context: Context, volumes: List<String>): List<MediaRow> {
+    val list = mutableListOf<MediaRow>()
+
     val projection = arrayOf(
         MediaStore.Audio.Media._ID,
         MediaStore.Audio.Media.DISPLAY_NAME,
@@ -48,16 +66,9 @@ private fun queryMediaRows(
         MediaStore.Audio.Media.DATE_ADDED,
         MediaStore.Audio.Media.YEAR,
         MediaStore.Audio.Media.VOLUME_NAME,
-        MediaStore.Audio.Media.BUCKET_ID
+        MediaStore.Audio.Media.BUCKET_ID,
+        MediaStore.Audio.Media.DATE_MODIFIED
     )
-    val chunk = ArrayList<MediaRow>(chunkSize)
-    for (volume in volumes) {
-        val uri = MediaStore.Audio.Media.getContentUri(volume)
-            .buildUpon().appendQueryParameter("distinct", "true").build()
-        context.contentResolver.query(uri, projection, null, null)?.use { cursor ->
-            onCalculateTotal(cursor.count)
-        }
-    }
     for (volume in volumes) {
         val uri = MediaStore.Audio.Media.getContentUri(volume)
             .buildUpon().appendQueryParameter("distinct", "true").build()
@@ -67,129 +78,120 @@ private fun queryMediaRows(
             val durCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            val dateModifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
             val bucketIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.BUCKET_ID)
             val yearIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
             while (cursor.moveToNext()) {
-                val id = cursor.getLong(idCol)
-                val albumId = cursor.getLong(albumIdCol)
-                val displayName = cursor.getString(nameCol)
-                val year = cursor.getIntOrNull(yearIdCol)
-                val duration = cursor.getLong(durCol)
-                val dateAdded = cursor.getLong(dateAddedCol) * 1000L
-                val contentUri = ContentUris.withAppendedId(uri, id)
-                chunk += MediaRow(
-                    id = id, albumId = albumId, displayName = displayName, duration = duration,
-                    contentUri = contentUri, dateAddedMs = dateAdded, year = year,
-                    albumArtUri = albumArtOrNull(context, albumId),
-                    volumeName = volume, bucketId = cursor.getLong(bucketIdCol)
-                )
-                if (chunk.size >= chunkSize) {
-                    emit(chunk.toList())
-                    chunk.clear()
+                try {
+                    val id = cursor.getLong(idCol)
+                    val albumId = cursor.getLong(albumIdCol)
+                    val contentUri = ContentUris.withAppendedId(uri, id)
+                    val dateModified = cursor.getLong(dateModifiedCol) * 1000L
+                    val dateAdded = cursor.getLong(dateAddedCol) * 1000L
+                    val displayName = cursor.getString(nameCol)
+                    val year = cursor.getIntOrNull(yearIdCol)
+                    val duration = cursor.getLong(durCol)
+                    list += MediaRow(
+                        id = id, albumId = albumId, displayName = displayName, duration = duration,
+                        contentUri = contentUri, dateAddedMs = dateAdded, year = year,
+                        volumeName = volume, bucketId = cursor.getLong(bucketIdCol),
+                        dateModifiedMs = dateModified
+                    )
+                } catch (e: Exception) {
+                    Log.e(XANDY_CLOUD, "${e.printStackTrace()}")
                 }
             }
         }
-        if (chunk.isNotEmpty()) {
-            emit(chunk.toList())
-            chunk.clear()
-        }
     }
-}.flowOn(Dispatchers.IO.limitedParallelism(1, "Query media rows"))
+    return list
+}
 
 /**
- * Returns a flow which is a pair, Audio file and a Boolean
- *
- * If the audio is new, it'll return false.
+ * Returns media files
  */
-fun loadAudioFiles(
-    context: Context, chunkSize: Int, audioDao: AudioDao, onProgress: (Int) -> Unit
-): Flow<List<Pair<AudioFile, Boolean>>> = flow {
-    val mutableList = ArrayList<Pair<AudioFile, Boolean>>(chunkSize)
-    var total = 0
-    var i = 0
-    val volumes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-        listOf(MediaStore.VOLUME_EXTERNAL, MediaStore.VOLUME_INTERNAL)
-    else listOf("external", "internal")
+suspend fun loadAudioFiles(
+    context: Context,
+    volumes: List<String>,
+    audioDao: AudioDao
+): List<ImportedAudioDetails> {
+    val mutableList = mutableListOf<ImportedAudioDetails>()
+    val pictureUri = context.drawableResUri(R.drawable.unknown_track)
     try {
-        queryMediaRows(
-            context, volumes, chunkSize = 100, onCalculateTotal = { total += it }
-        ).collect { rows ->
-            for (row in rows) {
-                val date = Date(row.dateAddedMs)
-                val uuid = audioDao.getAudioId(row.contentUri)?.id
-                    ?: UUID.randomUUID().toString()
-                try {
-                    val metadata = context.contentResolver.openFileDescriptor(
+        val rows = queryMediaRows(context, volumes)
+        for (row in rows) {
+            val date = Date(row.dateAddedMs)
+            val dateModified = Date(row.dateModifiedMs)
+            val dbDateModified = audioDao.getAudioDateModified(row.contentUri, row.id)?.dateModified
+            val uuid =
+                audioDao.getAudioId(row.contentUri, row.id)?.id ?: UUID.randomUUID().toString()
+            try {
+                val metadata =
+                    if (dbDateModified != dateModified) context.contentResolver.openFileDescriptor(
                         row.contentUri, "r"
                     )?.use { fd ->
                         return@use TagLib.getMetadata(
                             fd = fd.dup().detachFd()
                         )
-                    }
-                    val title = metadata?.propertyMap[TagProperty.TITLE]?.singleOrNull()
-                    val artist = metadata?.propertyMap[TagProperty.ARTIST]?.singleOrNull()
-                    val album = metadata?.propertyMap[TagProperty.ALBUM]?.singleOrNull()
-                    val genre = metadata?.propertyMap[TagProperty.GENRE]?.singleOrNull()
-                    val dateRelease = metadata?.propertyMap[TagProperty.DATE]?.singleOrNull()
-                    val songId = metadata?.propertyMap[XANDY_SONG_ID]?.singleOrNull()
-                    val dateParts = parseTagDate(dateRelease)
-                    val pictureUri = row.albumArtUri ?: getArtData(row.contentUri, context)
-                    ?: context.drawableResUri(R.drawable.unknown_track)
-                    mutableList += Pair(
-                        AudioFile(
-                            id = songId ?: uuid,
-                            uri = row.contentUri,
-                            displayName = row.displayName,
-                            title = title ?: row.displayName, artist = artist ?: "Unknown Artist",
-                            album = album, genre = genre,
-                            year = row.year ?: dateParts.year,
-                            day = dateParts.day, month = dateParts.month,
-                            durationMillis = row.duration,
-                            picture = pictureUri, createdOn = date,
-                            bucketId = row.bucketId, volumeName = row.volumeName
-                        ), songId != null
-                    )
-                } catch (e: Exception) {
-                    Log.w(
-                        XANDY_CLOUD,
-                        "Failed to get metadata from ${row.displayName}: ${e.printStackTrace()}"
-                    )
-                    mutableList += Pair(
-                        AudioFile(
-                            id = uuid,
-                            uri = row.contentUri,
-                            displayName = row.displayName,
-                            title = row.displayName, artist = "Unknown Artist",
-                            album = null, genre = null, year = row.year, day = null, month = null,
-                            durationMillis = row.duration,
-                            picture = context.drawableResUri(R.drawable.unknown_track),
-                            createdOn = date,
-                            bucketId = row.bucketId, volumeName = row.volumeName
-                        ), false
-                    )
-                }
-                i++
-                val percent = (i * 100) / total
-                onProgress(percent)
-                if (mutableList.size >= chunkSize) {
-                    emit(mutableList.toList())
-                    mutableList.clear()
-                }
+                    } else null
+                val title = metadata?.propertyMap[TagProperty.TITLE]?.singleOrNull()
+                val artist = metadata?.propertyMap[TagProperty.ARTIST]?.singleOrNull()
+                val album = metadata?.propertyMap[TagProperty.ALBUM]?.singleOrNull()
+                val genre = metadata?.propertyMap[TagProperty.GENRE]?.singleOrNull()
+                val dateRelease = metadata?.propertyMap[TagProperty.DATE]?.singleOrNull()
+                val songId = metadata?.propertyMap[XANDY_SONG_ID]?.singleOrNull()
+                val dateParts = parseTagDate(dateRelease)
+                mutableList += ImportedAudioDetails(
+                    audio = AudioFile(
+                        id = songId ?: uuid,
+                        fileId = row.id,
+                        uri = row.contentUri,
+                        displayName = row.displayName,
+                        title = title ?: row.displayName, artist = artist ?: "Unknown Artist",
+                        album = album, genre = genre,
+                        year = row.year ?: dateParts.year,
+                        day = dateParts.day, month = dateParts.month,
+                        durationMillis = row.duration,
+                        picture = pictureUri, createdOn = date,
+                        bucketId = row.bucketId, volumeName = row.volumeName,
+                        dateModified = dateModified
+                    ),
+                    mrp = MediaRowPicture(
+                        contentUri = row.contentUri, albumId = row.albumId
+                    ),
+                    songIdNotNull = songId != null, modified = dbDateModified != dateModified
+                )
+
+            } catch (e: Exception) {
+                Log.w(
+                    XANDY_CLOUD,
+                    "Failed to get metadata from ${row.displayName}: ${e.printStackTrace()}"
+                )
+                mutableList += ImportedAudioDetails(
+                    audio = AudioFile(
+                        id = uuid, fileId = row.id,
+                        uri = row.contentUri,
+                        displayName = row.displayName,
+                        title = row.displayName, artist = "Unknown Artist",
+                        album = null, genre = null, year = row.year, day = null, month = null,
+                        durationMillis = row.duration,
+                        picture = pictureUri,
+                        createdOn = date, dateModified = dateModified,
+                        bucketId = row.bucketId, volumeName = row.volumeName
+                    ),
+                    mrp = MediaRowPicture(
+                        contentUri = row.contentUri, albumId = row.albumId
+                    ),
+                    songIdNotNull = false, dbDateModified != dateModified
+                )
             }
-        }
-        if (mutableList.isNotEmpty()) {
-            emit(mutableList.toList())
-            mutableList.clear()
         }
     } catch (e: Exception) {
         Log.e(
             XANDY_CLOUD, "Failed to load local media at ${mutableList[mutableList.lastIndex]}: $e"
         )
-        emit(mutableList.toList())
-        mutableList.clear()
-        onProgress(0)
     }
-}.flowOn(Dispatchers.IO.limitedParallelism(1, "File  Retrieval"))
+    return mutableList
+}
 
 data class DateParts(val year: Int?, val month: Int?, val day: Int?)
 
@@ -264,6 +266,10 @@ suspend fun loadAudioUris(
     }
 }
 
+fun getArtData(context: Context, albumId: Long, uri: Uri) =
+    albumArtOrNull(context, albumId) ?: getArtData(uri, context)
+
+
 private fun albumArtOrNull(context: Context, albumId: Long): Uri? {
     val uri = getAlbumArtUri(albumId)
     return try {
@@ -297,5 +303,3 @@ fun List<MediaItemWithCreatedOn>.getAllImages() = this.mapNotNull {
     ) null
     else it.mediaItem.mediaMetadata.artworkUri
 }
-
-

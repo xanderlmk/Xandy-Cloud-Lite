@@ -24,7 +24,8 @@ object AppVMProvider {
             NavViewModel(
                 this.createSavedStateHandle(),
                 xandyCloudApplication().container.uiRepository,
-                xandyCloudApplication().container.songRepository
+                xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.lyricsRepository
             )
         }
         initializer {
@@ -33,12 +34,14 @@ object AppVMProvider {
         initializer {
             LocalMediaVM(
                 xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.lyricsRepository,
                 xandyCloudApplication().container.uiRepository
             )
         }
         initializer {
             LocalPLVM(
                 xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.lyricsRepository,
                 xandyCloudApplication().container.uiRepository
             )
         }
@@ -46,32 +49,40 @@ object AppVMProvider {
         initializer {
             LocalAlbumVM(
                 xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.lyricsRepository,
                 xandyCloudApplication().container.uiRepository
             )
         }
         initializer {
             LocalArtistVM(
                 xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.lyricsRepository,
                 xandyCloudApplication().container.uiRepository
             )
         }
         initializer {
             LocalFolderVM(
                 xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.lyricsRepository,
                 xandyCloudApplication().container.uiRepository
             )
         }
         initializer {
             LocalGenreVM(
                 xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.lyricsRepository,
                 xandyCloudApplication().container.uiRepository
             )
         }
         initializer {
             EditAudioVM(xandyCloudApplication().container.songRepository)
         }
-        initializer { LyricsVM(xandyCloudApplication().container.songRepository) }
-        initializer { LyricsEditorVM(xandyCloudApplication().container.songRepository) }
+        initializer { LyricsVM(xandyCloudApplication().container.lyricsRepository) }
+        initializer { LyricsEditorVM(
+            xandyCloudApplication().container.lyricsRepository,
+            xandyCloudApplication().container.songRepository
+        )
+        }
     }
 }
 

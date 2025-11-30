@@ -25,7 +25,7 @@ import com.xandy.lite.ui.functions.item.details.PlaylistRow
 import com.xandy.lite.controllers.view.models.AddToLocalPlVM
 import com.xandy.lite.ui.functions.AddPlDialog
 import com.xandy.lite.ui.functions.ContentIcons
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 
 
 @Composable

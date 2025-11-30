@@ -28,39 +28,8 @@ class EditAudioVM(
         scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
         initialValue = emptyList()
     )
-    private val _set = MutableStateFlow(emptyList<LyricLine>())
-    val set = _set.asStateFlow()
     suspend fun updateAudioTags(newAudio: AudioFile, lyrics: Lyrics?) =
         songRepository.updateAudioTags(
-            newAudio, lyrics?.copy(scroll = _set.value.toSet().takeIf { it.isNotEmpty() })
+            newAudio, lyrics
         )
-
-    fun addToSet(start: Long, end: Long) = _set.update {
-        val new = it.toMutableList()
-        new.add(LyricLine(LongRange(start, end), ""))
-        new.toList()
-    }
-
-    fun removeLast() = _set.update {
-        val new = it.toMutableList()
-        new.removeAt(new.lastIndex)
-        new.toList()
-    }
-
-    fun updateLineTextAt(index: Int, text: String) = _set.update {
-        val new = it.toMutableList()
-        new[index] = new[index].copy(text = text)
-        new
-    }
-
-    fun updateLineRangeAt(index: Int, start: Long, end: Long) = _set.update {
-        if ((index - 1) in it.indices && start < it[index - 1].range.last ||
-            (index + 1) in it.indices && end > it[index + 1].range.first
-        ) return@update it
-        val new = it.toMutableList()
-        new[index] = new[index].copy(range = LongRange(start, end))
-        new
-    }
-    fun updateScrollSet() =
-        _set.update { pickedAudio.value?.lyrics?.scroll?.toList() ?: emptyList() }
 }

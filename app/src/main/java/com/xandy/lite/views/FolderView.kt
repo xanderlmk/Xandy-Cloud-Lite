@@ -23,11 +23,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xandy.lite.controllers.view.models.LocalFolderVM
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.BucketWithAudio
+import com.xandy.lite.models.XCToast
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.LyricsListDialog
 import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.PlayOptions
-import com.xandy.lite.ui.theme.GetUIStyle
+import com.xandy.lite.ui.GetUIStyle
 import kotlinx.coroutines.launch
 
 
@@ -57,6 +58,7 @@ fun LocalFolderView(
     val lyricsList by vm.lyricsList.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val toast = XCToast(context)
     SongLazyColumn(
         list = b.audioList, enabled = enabled, getUIStyle = getUIStyle, isSelecting = isSelecting,
         onClick = { audio ->
@@ -65,9 +67,15 @@ fun LocalFolderView(
             } else vm.toggleSong(audio.uri.toString())
         }, onEdit = onEdit, onAdd = onAdd, currentId = currentId,
         onLongPress = {
-            if (isSelecting) vm.toggleSong(it)
-            else vm.startSelecting(it)
+            if (isSelecting) {
+                val limitReached = vm.toggleSong(it)
+                if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
+            } else vm.startSelecting(it)
         }, onDelete = onDelete,
+        onEnqueue = {
+            val result = vm.addToQueue(listOf(it))
+            if (result) toast.makeMessage("Song already in queue")
+        },
         onUpsertLyrics = { showDialog = Pair(true, it) },
         modifier = modifier
             .fillMaxWidth()
