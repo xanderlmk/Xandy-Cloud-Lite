@@ -13,14 +13,20 @@ android {
     namespace = "com.xandy.lite"
     compileSdk = 36
 
+    configurations.all {
+        resolutionStrategy.force(
+            "androidx.compose.foundation:foundation:1.9.5",
+            "androidx.compose.foundation:foundation-layout:1.9.5"
+        )
+    }
     defaultConfig {
         applicationId = "com.xandy.lite"
         minSdk = 26
         targetSdk = 36
-        versionCode = 52
-        versionName = "1.1.300"
+        versionCode = 81
+        versionName = "1.1.427-beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ndk { this.debugSymbolLevel = "SYMBOL_TABLE" }
+        // ndk { this.debugSymbolLevel = "SYMBOL_TABLE" }
         buildConfigField(
             "String", "PART_ONE", "\"" + gradleLocalProperties(rootDir, providers)
                 .getProperty("PART_ONE", "") + "\""
@@ -85,12 +91,20 @@ android {
         compose = true
         buildConfig = true
     }
-    ksp {
-        arg("room.schemaLocation", "$projectDir/schemas")
-    }
+    ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 }
 
 dependencies {
+    //implementation(project(":core"))
+
+    implementation(libs.androidx.glance.appwidget)
+    implementation(files("libs/RoomMigrationHelper-release.aar"))
+    //implementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+
+
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.foundation.layout)
     // Media Player
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.dash)
@@ -100,7 +114,6 @@ dependencies {
     /** File permissions */
     implementation(libs.accompanist.permissions)
     /** Vertical scroll bar */
-    //implementation(libs.androidx.foundation.desktop)
     implementation(libs.lazycolumnscrollbar)
     implementation(files("libs/taglib-release.aar"))
     implementation(libs.androidx.room.runtime)
@@ -108,6 +121,10 @@ dependencies {
 
     implementation(libs.androidx.navigation.compose)
     implementation(libs.media3.session)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.constraintlayout)
 
 
     // If this project uses any Kotlin source, use Kotlin Symbol Processing (KSP)
@@ -141,6 +158,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences.rxjava2)
     // optional - RxJava3 support
     implementation(libs.androidx.datastore.preferences.rxjava3)
+
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
 
@@ -157,7 +175,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
+    //androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

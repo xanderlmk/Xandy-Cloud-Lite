@@ -31,6 +31,7 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_provider" />
         </provider>
+
         <service
             android:name=".models.media.player.PlaybackService"
             android:exported="false"
@@ -40,6 +41,7 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"
             android:exported="true">
@@ -47,6 +49,18 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
+
+        <receiver android:name=".widget.XandyWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -60,7 +74,23 @@
         <activity
             android:name=".SongViewActivity"
             android:exported="true"
-            android:theme="@style/Theme.XandyCloudLite" />
+            android:theme="@style/Theme.XandyLiteAnimated" />
+        <activity
+            android:name=".OpenXclfActivity"
+            android:exported="true"
+            android:theme="@style/Theme.XandyLiteAnimated">
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:mimeType="application/x-xclf" />
+            </intent-filter>
+
+        </activity>
+
     </application>
 
 </manifest>

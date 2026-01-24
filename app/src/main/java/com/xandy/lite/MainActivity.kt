@@ -1,6 +1,8 @@
 package com.xandy.lite
 
 import android.content.ComponentName
+import android.content.Context
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -21,6 +23,8 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.navigation.compose.rememberNavController
 import com.google.common.util.concurrent.ListenableFuture
+import com.xandy.lite.db.tables.itemKey
+import com.xandy.lite.models.AppPref
 import com.xandy.lite.models.media.player.PlaybackService
 import com.xandy.lite.models.Theme
 import com.xandy.lite.models.application.AppVMProvider
@@ -29,8 +33,8 @@ import com.xandy.lite.models.application.PrefRepositoryImpl
 import com.xandy.lite.models.application.PreferencesManager
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.mediaControllerBuilder
-import com.xandy.lite.models.itemKey
 import com.xandy.lite.navigation.MainNavHost
+import com.xandy.lite.navigation.NavHosts
 import com.xandy.lite.navigation.NavViewModel
 import com.xandy.lite.ui.GetUIStyle
 import com.xandy.lite.ui.theme.XandyCloudTheme
@@ -40,6 +44,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import java.util.Locale
 import kotlin.getValue
 
 @UnstableApi
@@ -53,11 +58,13 @@ class MainActivity : ComponentActivity() {
         private const val CHANGED_PLAYBACK_SETTINGS = "playback_settings_changed"
     }
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val appPref = applicationContext.getSharedPreferences(PREFERENCES, MODE_PRIVATE)
         val preferences: PrefRepository = PrefRepositoryImpl(application, appPref)
-        val pm = PreferencesManager(preferences,applicationScope)
+        val pm = PreferencesManager(preferences, applicationScope)
         super.onCreate(savedInstanceState)
+        if (isTaskRoot) navVM.onCreateVM()
         enableEdgeToEdge()
         setContent {
             val theme by pm.theme.collectAsStateWithLifecycle()
@@ -71,38 +78,48 @@ class MainActivity : ComponentActivity() {
             )
             val controller by navVM.mediaController.collectAsStateWithLifecycle()
             LaunchedEffect(controller) {
-                while (controller == null) {
-                    delay(2_500)
-                    getController()
-                }
+                if (isTaskRoot)
+                    while (controller == null) {
+                        delay(500)
+                        getController()
+                    }
             }
-            XandyCloudTheme(isSystemDark) {
-                MainNavHost(
-                    mainNavController, getUIStyle, navVM = navVM, pm = pm,
-                    getController = { getController() },
-                    onRestartPlayer = {
-                        try {
-                            lifecycleScope.launch(Dispatchers.Main.immediate) {
-                                navVM.updateLastestPlayerInfo()
+            val navHosts = NavHosts(
+                onRestartPlayer = {
+                    try {
+                        lifecycleScope.launch(Dispatchers.Main.immediate) {
+                            navVM.updateLastestPlayerInfo()
+                            delay(250L)
+                            val mc = controllerFuture?.get() ?: return@launch
+                            appPref.edit { putBoolean(CHANGED_PLAYBACK_SETTINGS, true) }
+                            val wasPlaying = mc.isPlaying
+                            mc.pause()
+                            safeReleaseController(true)
+                            delay(250L)
+                            connectToPlaybackService().apply {
                                 delay(250L)
-                                val mc = controllerFuture?.get() ?: return@launch
-                                appPref.edit { putBoolean(CHANGED_PLAYBACK_SETTINGS, true) }
-                                val wasPlaying = mc.isPlaying
-                                mc.pause()
-                                safeReleaseController()
-                                delay(250L)
-                                connectToPlaybackService().apply {
-                                    delay(250L)
-                                    if (wasPlaying) {
-                                        val newMc = controllerFuture?.get() ?: return@apply
-                                        newMc.play()
-                                    }
+                                if (wasPlaying) {
+                                    val newMc = controllerFuture?.get() ?: return@apply
+                                    newMc.play()
                                 }
                             }
-                        } catch (_: Exception) {
-                            Log.e(XANDY_CLOUD, "Failed to restart player")
                         }
+                    } catch (_: Exception) {
+                        Log.e(XANDY_CLOUD, "Failed to restart player")
                     }
+                },
+                onRecreate = {
+                    lifecycleScope.launch(Dispatchers.Main.immediate) {
+                        navVM.updateLanguage()
+                        delay(200L); pm.updateAcknowledgement(true); delay(50L)
+                        this@MainActivity.recreate()
+                    }
+                }
+            )
+            XandyCloudTheme(isSystemDark) {
+                navHosts.MainNavHost(
+                    mainNavController, getUIStyle, navVM = navVM, pm = pm,
+                    getController = { getController() },
                 )
             }
         }
@@ -117,9 +134,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun attachBaseContext(newBase: Context?) {
+        val new = newBase?.let { context ->
+            val appPref = context.getSharedPreferences(PREFERENCES, MODE_PRIVATE)
+            val locale = AppPref.getLanguage(appPref)
+                ?.let { Locale.forLanguageTag(it) } ?: Locale.getDefault()
+            val config = Configuration(context.resources.configuration)
+            config.setLocale(locale)
+            context.createConfigurationContext(config)
+        }
+        super.attachBaseContext(new ?: newBase)
+
+    }
+
+
+
     override fun onDestroy() {
         super.onDestroy()
-        safeReleaseController()
+        navVM.stopCheckingPosition()
+        safeReleaseController(false)
     }
 
     private fun getController() {
@@ -127,6 +160,7 @@ class MainActivity : ComponentActivity() {
             val controller = controllerFuture?.get() ?: return
             navVM.updateMediaController(controller)
             navVM.updateIsPlaying(controller.isPlaying)
+            navVM.updatePickedSong(controller.currentMediaItem?.itemKey())
         } catch (e: Exception) {
             Log.w(XANDY_CLOUD, "Failed to get controller: ${e.printStackTrace()}")
         }
@@ -135,6 +169,8 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         navVM.updateLastestPlayerInfo()
+        navVM.stopCheckingPosition()
+        safeReleaseController(false)
     }
 
     override fun onPause() {
@@ -147,7 +183,7 @@ class MainActivity : ComponentActivity() {
         navVM.updateLastestPlayerInfo()
     }
 
-    private fun safeReleaseController() {
+    private fun safeReleaseController(reset: Boolean) {
         val future = controllerFuture ?: return
         try {
             if (future.isDone) {
@@ -168,14 +204,16 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.w(XANDY_CLOUD, "Failed to release controller", e)
         } finally {
+            Log.i(XANDY_CLOUD, "Release SongViewActivity Controller")
             controllerFuture = null
-            navVM.resetMediaController()
+            if (reset)
+                navVM.resetMediaController()
         }
     }
 
     private fun connectToPlaybackService() = try {
         if (controllerFuture != null)
-            safeReleaseController()
+            safeReleaseController(true)
         val sessionToken =
             SessionToken(this, ComponentName(this, PlaybackService::class.java))
         controllerFuture = try {
@@ -184,7 +222,6 @@ class MainActivity : ComponentActivity() {
                 updatePickedSong = { lifecycleLaunch(navVM.updatePickedSong(it?.itemKey())) },
                 updateDuration = { lifecycleLaunch(navVM.updateDuration(it)) },
                 updatePosition = { lifecycleLaunch(navVM.updatePosition(it)) },
-                updateTracks = { lifecycleLaunch(navVM.updateTracks(it)) },
                 updateIsLoading = { lifecycleLaunch(navVM.updateIsLoading(it)) },
                 updateIsPlaying = { lifecycleLaunch(navVM.updateIsPlaying(it)) },
                 updateMediaController = { navVM.updateMediaController(it) }

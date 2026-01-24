@@ -3,7 +3,6 @@ package com.xandy.lite.views
 import android.Manifest
 import android.content.res.Configuration
 import android.os.Build
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -37,18 +36,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.xandy.lite.R
 import com.xandy.lite.ui.functions.item.details.PlaylistRow
 import com.xandy.lite.controllers.view.models.LocalMediaVM
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Playlist
+import com.xandy.lite.db.tables.firstId
+import com.xandy.lite.models.AudioDialog
 import com.xandy.lite.models.XCToast
+import com.xandy.lite.models.ui.InsertResult
 import com.xandy.lite.models.ui.LocalMusicTabs
+import com.xandy.lite.models.ui.MediaState
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.DeleteModal
 import com.xandy.lite.ui.functions.LyricsListDialog
@@ -58,6 +63,9 @@ import com.xandy.lite.ui.functions.item.details.ArtistRow
 import com.xandy.lite.ui.functions.item.details.FolderRow
 import com.xandy.lite.ui.functions.item.details.GenreRow
 import com.xandy.lite.ui.GetUIStyle
+import com.xandy.lite.ui.functions.AudioDetailsDialog
+import com.xandy.lite.ui.functions.ChangePlNameDialog
+import com.xandy.lite.ui.functions.item.details.SongRow
 import kotlinx.coroutines.launch
 import my.nanihadesuka.compose.LazyColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
@@ -66,36 +74,47 @@ import my.nanihadesuka.compose.ScrollbarSettings
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalMusicView(
-    modifier: Modifier, currentId: String, getUIStyle: GetUIStyle, onAdd: (String) -> Unit,
-    onNavToArtist: (String) -> Unit, onNavToAlbum: (String) -> Unit, onNavToPl: (String) -> Unit,
-    onNavToGenre: (String) -> Unit, onNavToFolder: (String, Long) -> Unit,
-    onEdit: (String) -> Unit, onDelete: (AudioFile) -> Unit, localMediaVM: LocalMediaVM
+    modifier: Modifier,
+    currentId: String,
+    getUIStyle: GetUIStyle,
+    onAdd: (String) -> Unit,
+    onNavToArtist: (MediaState) -> Unit,
+    onNavToAlbum: (MediaState) -> Unit,
+    onNavToPl: (String) -> Unit,
+    onNavToGenre: (MediaState) -> Unit,
+    onNavToFolder: (String, Long) -> Unit,
+    onEdit: (String) -> Unit,
+    onDelete: (AudioFile) -> Unit,
+    vm: LocalMediaVM
 ) {
-    val selectedTab by localMediaVM.tab.collectAsStateWithLifecycle()
-    val isSelecting by localMediaVM.isSelecting.collectAsStateWithLifecycle()
-    val isSearching by localMediaVM.isSearching.collectAsStateWithLifecycle()
-    val selectedSongSet = localMediaVM.selectedSongIds.collectAsStateWithLifecycle().value.toSet()
-    val alIsLoading by localMediaVM.localAudiosLoading.collectAsStateWithLifecycle()
-    val query by localMediaVM.query.collectAsStateWithLifecycle()
-    val library by localMediaVM.musicLibrary.collectAsStateWithLifecycle()
-    val lyricsList by localMediaVM.lyricsList.collectAsStateWithLifecycle()
+    val selectedTab by vm.tab.collectAsStateWithLifecycle()
+    val isSelecting by vm.isSelecting.collectAsStateWithLifecycle()
+    val isSearching by vm.isSearching.collectAsStateWithLifecycle()
+    val selectedSongSet = vm.selectedSongIds.collectAsStateWithLifecycle().value.toSet()
+    val alIsLoading by vm.localAudiosLoading.collectAsStateWithLifecycle()
+    val query by vm.query.collectAsStateWithLifecycle()
+    val library by vm.musicLibrary.collectAsStateWithLifecycle()
+    val lyricsList by vm.lyricsList.collectAsStateWithLifecycle()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val selectedFolders by localMediaVM.selectedFolders.collectAsStateWithLifecycle()
+    val selectedFolders by vm.selectedFolders.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     var showDialog by rememberSaveable { mutableStateOf(Pair(false, "")) }
     var enabled by rememberSaveable { mutableStateOf(true) }
+    var afDetails by rememberSaveable { mutableStateOf(AudioDialog()) }
     val tabs = listOf(
-        "Library" to LocalMusicTabs.LIBRARY,
-        "Playlists" to LocalMusicTabs.PLAYLIST,
-        "Albums" to LocalMusicTabs.ALBUMS,
-        "Artists" to LocalMusicTabs.ARTISTS,
-        "Genres" to LocalMusicTabs.GENRES,
-        "Folders" to LocalMusicTabs.FOLDERS,
-        "Hidden" to LocalMusicTabs.HIDDEN
+        stringResource(R.string.Favorites) to LocalMusicTabs.FAVORITES,
+        stringResource(R.string.Library) to LocalMusicTabs.LIBRARY,
+        stringResource(R.string.Playlists) to LocalMusicTabs.PLAYLIST,
+        stringResource(R.string.Albums) to LocalMusicTabs.ALBUMS,
+        stringResource(R.string.Artists) to LocalMusicTabs.ARTISTS,
+        stringResource(R.string.Genres) to LocalMusicTabs.GENRES,
+        stringResource(R.string.Folders) to LocalMusicTabs.FOLDERS,
+        stringResource(R.string.Hidden) to LocalMusicTabs.HIDDEN
     )
     val toast = XCToast(context)
     val ci = ContentIcons(getUIStyle)
+    val favoriteState = rememberLazyListState()
     val libraryState = rememberLazyListState()
     val hiddenState = rememberLazyListState()
     val albumState = rememberLazyListState()
@@ -103,19 +122,20 @@ fun LocalMusicView(
     val genreState = rememberLazyListState()
     val onLongPress: (String) -> Unit = {
         if (isSelecting) {
-            val limitReached = localMediaVM.toggleSong(it)
-            if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
-        } else localMediaVM.startSelecting(it)
+            val limitReached = vm.toggleSong(it)
+            if (limitReached) toast.makeMessage(toast.unableToGet2kPlusFiles)
+        } else vm.startSelecting(it)
     }
     val onClick: (AudioFile, List<AudioFile>) -> Unit = { audio, list ->
         if (!isSelecting) {
-            localMediaVM.selectSong(audio, list)
+            vm.selectSong(audio, list)
         } else {
-            val limitReached = localMediaVM.toggleSong(audio.id)
-            if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
+            val limitReached = vm.toggleSong(audio.id)
+            if (limitReached) toast.makeMessage(toast.unableToGet2kPlusFiles)
         }
     }
     var clicked by remember { mutableStateOf(false) }
+    val appStrings by vm.appStrings.collectAsStateWithLifecycle()
 
     MediaPermissionView(modifier.padding(top = 4.dp)) {
         if (!isSelecting && !isSearching) {
@@ -135,7 +155,7 @@ fun LocalMusicView(
                     Text(
                         text = label, color = textColor, fontWeight = fontWeight,
                         modifier = Modifier
-                            .clickable(enabled = !clicked) { localMediaVM.updateTab(tab) }
+                            .clickable(enabled = !clicked) { vm.updateTab(tab) }
                             .padding(horizontal = 4.dp)
                             .background(bgColor, RoundedCornerShape(8.dp))
                             .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -144,6 +164,69 @@ fun LocalMusicView(
             }
         }
         when (selectedTab) {
+            LocalMusicTabs.FAVORITES -> {
+                LazyColumnScrollbar(
+                    state = favoriteState,
+                    settings = ScrollbarSettings(
+                        thumbSelectedColor = getUIStyle.selectedThumbColor(),
+                        thumbUnselectedColor = getUIStyle.unSelectedThumbColor()
+                    )
+                ) {
+                    val filtered = library.favorites.filter {
+                        if (query.isBlank() || !isSearching) return@filter true
+                        it.title.contains(query, ignoreCase = true) ||
+                                it.artist?.contains(query, ignoreCase = true) ?: false
+                    }
+
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(filtered, key = { it.id }) { audio ->
+                            val isPicked = audio.id == currentId
+                            val selected = audio.id in selectedSongSet
+
+                            SongRow(
+                                song = audio, appStrings,
+                                getUIStyle = getUIStyle, context = context,
+                                isSelecting = isSelecting, enabled = !alIsLoading,
+                                onClick = {
+                                    onClick(audio, library.audioUIState.list.map { it.song })
+                                }, isSelected = selected, isPickedSong = isPicked,
+                                onLongPress = { onLongPress(audio.id) },
+                                onAdd = { onAdd(audio.id) },
+                                onEnqueue = {
+                                    val result = vm.addToQueue(listOf(audio))
+                                    if (result) toast.makeMessage(toast.trackAlreadyInQueue)
+                                    else toast.makeMessage(toast.trackAddedToQueue)
+                                },
+                                onAddNext = {
+                                    val result = vm.playNext(audio)
+                                    when (result) {
+                                        InsertResult.Exists ->
+                                            toast.makeMessage(toast.trackAlreadyInPlayNext)
+
+                                        InsertResult.Failure ->
+                                            toast.makeMessage(toast.failedToAddTrackNullMC)
+
+                                        InsertResult.Success ->
+                                            toast.makeMessage(toast.trackAddedToPlayNext)
+                                    }
+                                },
+                                onEdit = { onEdit(audio.uri.toString()) },
+                                onRemoveFavorite = {
+                                    coroutineScope.launch {
+                                        val result = vm.onUnfavoriteSong(audio.uri)
+                                        if (!result)
+                                            toast.makeMessage(toast.failedToUnfavoriteTrack)
+                                    }
+                                },
+                                onDelete = { onDelete(audio) },
+                                onUpsertLyrics = { showDialog = Pair(true, audio.uri.toString()) }
+                            )
+
+                        }
+                    }
+                }
+            }
+
             LocalMusicTabs.LIBRARY -> {
                 LazyColumnScrollbar(
                     state = libraryState,
@@ -152,26 +235,55 @@ fun LocalMusicView(
                         thumbUnselectedColor = getUIStyle.unSelectedThumbColor()
                     )
                 ) {
-                    val filtered by localMediaVM.filteredAudioFiles.collectAsStateWithLifecycle()
+                    val filtered by vm.filteredAudioFiles.collectAsStateWithLifecycle()
                     SongLazyColumn(
-                        list = filtered, getUIStyle = getUIStyle, hideAllowed = Pair(true, "Hide"),
+                        list = filtered, getUIStyle = getUIStyle,
+                        hideAllowed = Pair(true, stringResource(R.string.Hide)),
                         isSelecting = isSelecting, enabled = !alIsLoading,
-                        selectedSongSet = selectedSongSet, state = libraryState,
+                        appStrings = appStrings, selectedSongSet = selectedSongSet,
+                        state = libraryState,
                         onClick = { audio ->
                             onClick(audio, library.audioUIState.list.map { it.song })
                         }, modifier = Modifier.fillMaxWidth(),
+                        onShowDetails = { afDetails = AudioDialog(it, true) },
                         onEnqueue = {
-                            val result = localMediaVM.addToQueue(listOf(it))
-                            if (result) toast.makeMessage("Song already in queue")
+                            val result = vm.addToQueue(listOf(it))
+                            if (result) toast.makeMessage(toast.trackAlreadyInQueue)
+                            else toast.makeMessage(toast.trackAddedToQueue)
+                        },
+                        onAddNext = {
+                            val result = vm.playNext(it)
+                            when (result) {
+                                InsertResult.Exists ->
+                                    toast.makeMessage(toast.trackAlreadyInPlayNext)
+
+                                InsertResult.Failure ->
+                                    toast.makeMessage(toast.failedToAddTrackNullMC)
+
+                                InsertResult.Success ->
+                                    toast.makeMessage(toast.trackAddedToPlayNext)
+                            }
+                        },
+                        onAddFavorite = {
+                            coroutineScope.launch {
+                                val result = vm.onFavoriteSong(it)
+                                when (result) {
+                                    InsertResult.Exists ->
+                                        toast.makeMessage(toast.trackAlreadyInFavorites)
+
+                                    InsertResult.Failure ->
+                                        toast.makeMessage(toast.failedToAddToFavorites)
+
+                                    InsertResult.Success -> {}
+                                }
+                            }
                         },
                         onEdit = onEdit, onDelete = onDelete, onAdd = onAdd,
                         onLongPress = onLongPress,
                         onToggleHide = { uri ->
                             coroutineScope.launch {
-                                val result = localMediaVM.onHideSong(uri)
-                                if (!result) Toast.makeText(
-                                    context, "Failed to hide audio", Toast.LENGTH_SHORT
-                                ).show()
+                                val result = vm.onHideSong(uri)
+                                if (!result) toast.makeMessage(toast.failedToHideTrack)
                             }
                         }, currentId = currentId,
                         onUpsertLyrics = { showDialog = Pair(true, it) }
@@ -184,6 +296,10 @@ fun LocalMusicView(
                 var showDelete by rememberSaveable {
                     mutableStateOf<Pair<Boolean, Playlist?>>(Pair(false, null))
                 }
+                var showDialog by rememberSaveable {
+                    mutableStateOf<Pair<Boolean, Playlist?>>(Pair(false, null))
+                }
+                var dismissEnabled by rememberSaveable { mutableStateOf(true) }
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     items(
                         library.plsWithAudios.list,
@@ -197,10 +313,34 @@ fun LocalMusicView(
                                 clicked = true
                                 onNavToPl(pl.playlist.id)
                                 clicked = false
-                            })
+                            },
+                            onChangeName = { showDialog = Pair(true, pl.playlist) }
+                        )
 
                     }
                 }
+                ChangePlNameDialog(
+                    showDialog = showDialog.first, originalName = showDialog.second?.name,
+                    onDismiss = { if (dismissEnabled) showDialog = Pair(false, null) },
+                    onSubmit = { newName ->
+                        coroutineScope.launch {
+                            val pl = showDialog.second
+                            if (pl == null) {
+                                toast.makeMessage(toast.undefinedPlaylist)
+                                return@launch
+                            }
+                            dismissEnabled = false
+                            val result = vm.changePlName(newName, pl.name, pl.id)
+                            when (result) {
+                                InsertResult.Exists -> toast.makeMessage(toast.nameAlreadyExists)
+                                InsertResult.Failure -> toast.makeMessage(toast.failedToAddPl)
+                                InsertResult.Success -> showDialog = Pair(false, null)
+                            }
+                            dismissEnabled = true
+                        }
+                    },
+                    enabled = dismissEnabled, getUIStyle = getUIStyle,
+                )
                 if (showDelete.first) {
                     DeleteModal(
                         onDismissRequest = { showDelete = Pair(false, null) },
@@ -208,11 +348,11 @@ fun LocalMusicView(
                             val pl = showDelete.second
                             if (pl != null)
                                 coroutineScope.launch {
-                                    val result = localMediaVM.deletePlaylist(pl)
-                                    if (!result) Toast.makeText(
-                                        context, "Failed to delete song", Toast.LENGTH_SHORT
-                                    ).show()
+                                    dismissEnabled = false
+                                    val result = vm.deletePlaylist(pl)
+                                    if (!result) toast.makeMessage(toast.failedToDeleteTrack)
                                     else showDelete = Pair(false, null)
+                                    dismissEnabled = true
                                 }
                         }, string = showDelete.second?.name
                     )
@@ -247,7 +387,10 @@ fun LocalMusicView(
                                         AlbumBox(album, getUIStyle) {
                                             if (clicked) return@AlbumBox
                                             clicked = true
-                                            onNavToAlbum(album.name)
+                                            onNavToAlbum(
+                                                MediaState(album.name, album.songs.firstId())
+                                            )
+
                                             clicked = false
                                         }
                                     }
@@ -284,7 +427,9 @@ fun LocalMusicView(
                             ArtistRow(artist, getUIStyle, onClick = {
                                 if (clicked) return@ArtistRow
                                 clicked = true
-                                onNavToArtist(artist.name)
+                                onNavToArtist(
+                                    MediaState(artist.name, artist.songs.firstId())
+                                )
                                 clicked = false
                             })
                         }
@@ -309,7 +454,9 @@ fun LocalMusicView(
                             GenreRow(genre, getUIStyle, onClick = {
                                 if (clicked) return@GenreRow
                                 clicked = true
-                                onNavToGenre(genre.name)
+                                onNavToGenre(
+                                    MediaState(genre.name, genre.songs.firstId())
+                                )
                                 clicked = false
                             })
                         }
@@ -325,12 +472,12 @@ fun LocalMusicView(
                         FolderRow(
                             folder = f.bucket, getUIStyle = getUIStyle, ci = ci,
                             onClick = {
-                                if (isSelecting) localMediaVM.toggleFolder(f.bucket)
+                                if (isSelecting) vm.toggleFolder(f.bucket)
                                 else onNavToFolder(f.bucket.volumeName, f.bucket.id)
                             },
                             onLongPress = {
-                                if (isSelecting) localMediaVM.toggleFolder(f.bucket)
-                                else localMediaVM.startSelectingFolders(
+                                if (isSelecting) vm.toggleFolder(f.bucket)
+                                else vm.startSelectingFolders(
                                     Pair(f.bucket.volumeName, f.bucket.id)
                                 )
                             },
@@ -352,16 +499,46 @@ fun LocalMusicView(
                     val filtered = library.hiddenAudios.filter { audio ->
                         if (query.isBlank() || !isSearching) return@filter true
                         audio.title.contains(query, ignoreCase = true) ||
-                                audio.artist.contains(query, ignoreCase = true)
+                                audio.artist?.contains(query, ignoreCase = true) ?: false
                     }
                     SongLazyColumn(
                         list = filtered, enabled = !alIsLoading, getUIStyle = getUIStyle,
                         onClick = { audio ->
                             onClick(audio, library.hiddenAudios)
                         },
+                        appStrings = appStrings,
+                        onShowDetails = { afDetails = AudioDialog(it, true) },
                         onEnqueue = {
-                            val result = localMediaVM.addToQueue(listOf(it))
-                            if (result) toast.makeMessage("Song already in queue")
+                            val result = vm.addToQueue(listOf(it))
+                            if (result) toast.makeMessage(toast.trackAlreadyInQueue)
+                            else toast.makeMessage(toast.trackAddedToQueue)
+                        },
+                        onAddNext = {
+                            val result = vm.playNext(it)
+                            when (result) {
+                                InsertResult.Exists ->
+                                    toast.makeMessage(toast.trackAlreadyInPlayNext)
+
+                                InsertResult.Failure ->
+                                    toast.makeMessage(toast.failedToAddTrackNullMC)
+
+                                InsertResult.Success ->
+                                    toast.makeMessage(toast.trackAddedToPlayNext)
+                            }
+                        },
+                        onAddFavorite = {
+                            coroutineScope.launch {
+                                val result = vm.onFavoriteSong(it)
+                                when (result) {
+                                    InsertResult.Exists ->
+                                        toast.makeMessage(toast.trackAlreadyInFavorites)
+
+                                    InsertResult.Failure ->
+                                        toast.makeMessage(toast.failedToAddToFavorites)
+
+                                    InsertResult.Success -> {}
+                                }
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         onDelete = { audio -> onDelete(audio) },
@@ -369,38 +546,39 @@ fun LocalMusicView(
                         onLongPress = onLongPress,
                         onToggleHide = { uri ->
                             coroutineScope.launch {
-                                val result = localMediaVM.onShowSong(uri)
-                                if (!result) Toast.makeText(
-                                    context, "Failed to show audio", Toast.LENGTH_SHORT
-                                ).show()
+                                val result = vm.onShowSong(uri)
+                                if (!result) toast.makeMessage(toast.failedToShowTrack)
                             }
                         },
-                        currentId = currentId,
+                        currentId = currentId, state = hiddenState,
                         onUpsertLyrics = { showDialog = Pair(true, it) },
-                        hideAllowed = Pair(true, "Show"), state = hiddenState,
+                        hideAllowed = Pair(true, stringResource(R.string.Show)),
                         onAdd = { onAdd(it) }, selectedSongSet = selectedSongSet,
                     )
                 }
             }
         }
+
+        AudioDetailsDialog(
+            audio = afDetails.af, showDialog = afDetails.show, getUIStyle = getUIStyle,
+            onDismiss = { afDetails = AudioDialog() }
+        )
         LyricsListDialog(
             showDialog = showDialog.first, onDismiss = { showDialog = Pair(false, "") },
             getUIStyle = getUIStyle, list = lyricsList, enabled = enabled,
             onSubmit = { lyricsId ->
                 coroutineScope.launch {
-                    val songId = showDialog.second
-                    if (songId.isBlank()) {
-                        Toast.makeText(context, "Null song", Toast.LENGTH_SHORT).show()
+                    val songUri = showDialog.second
+                    if (songUri.isBlank()) {
+                        toast.makeMessage(toast.nullTrack)
                         showDialog = Pair(false, "")
                         return@launch
                     }
                     enabled = false
                     val result =
-                        localMediaVM.updateSongLyrics(lyricsId = lyricsId, songUri = songId)
+                        vm.updateSongLyrics(lyricsId = lyricsId, songUri = songUri)
                     if (!result)
-                        Toast.makeText(
-                            context, "Failed to add lyrics to $songId", Toast.LENGTH_SHORT
-                        ).show()
+                        toast.makeMessage(toast.failedToAddLyricsTo(songUri))
                     enabled = true
                     showDialog = Pair(false, "")
                 }
@@ -421,7 +599,6 @@ private fun MediaPermissionView(modifier: Modifier, content: @Composable () -> U
 
     LaunchedEffect(readAudioState.status) {
         if (!readAudioState.status.isGranted) readAudioState.launchPermissionRequest()
-
     }
 
     if (readAudioState.status.isGranted) {
@@ -437,10 +614,10 @@ private fun MediaPermissionView(modifier: Modifier, content: @Composable () -> U
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text("This app needs permission to read your media files.")
+            Text(stringResource(R.string.PERMISSION_TO_READ_FILES))
             Spacer(Modifier.height(8.dp))
             Button(onClick = { readAudioState.launchPermissionRequest() }) {
-                Text("Grant")
+                Text(stringResource(R.string.Grant))
             }
         }
     }

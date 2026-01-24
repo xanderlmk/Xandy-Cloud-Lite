@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.XandyCloudLite" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.XandyCloudLite" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowAnimationStyle">@style/Animation.XandySlideUp</item>
+    </style>
+
+    <style name="Theme.XandyLiteAnimated" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowAnimationStyle">@style/Animation.XandySlideDown</item>
+    </style>
+
+    <style name="Animation.XandySlideDown" parent="@android:style/Animation.Activity">
+        <!-- when activity closes -->
+        <item name="android:activityCloseExitAnimation">@anim/slide_down</item>
+        <!-- optional: no animation for the activity behind coming back -->
+        <item name="android:activityCloseEnterAnimation">@anim/no_anim</item>
+    </style>
+
+    <style name="Animation.XandySlideUp" parent="@android:style/Animation.Activity">
+        <!-- when activity closes -->
+        <item name="android:activityOpenEnterAnimation">@anim/slide_up</item>
+    </style>
 </resources>

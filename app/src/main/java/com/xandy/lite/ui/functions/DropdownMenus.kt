@@ -32,32 +32,51 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.taglib.TagProperty
 import com.xandy.lite.R
-import com.xandy.lite.models.ui.LocalAudioStates
+import com.xandy.lite.controllers.view.models.LibraryBasedRouteVM
+import com.xandy.lite.models.application.AppVMProvider
+import com.xandy.lite.models.ui.IsDefaultMediaOrder
 import com.xandy.lite.models.ui.LocalMusicTabs
+import com.xandy.lite.models.ui.order.by.AlbumOrder
+import com.xandy.lite.models.ui.order.by.ArtistOrder
+import com.xandy.lite.models.ui.order.by.GenreOrder
 import com.xandy.lite.models.ui.order.by.PlaylistOrder
 import com.xandy.lite.models.ui.order.by.SongOrder
 import com.xandy.lite.navigation.NavViewModel
 import com.xandy.lite.ui.GetUIStyle
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 
+/**
+ *  @param onReverseSongOrder Reverse song order for: false to library tracks, true to hidden tracks
+ *  @param onUpdateSongOrder Update song order for: false to library tracks, true to hidden tracks
+ */
 @Composable
 fun LocalAudioOptions(
-    audioStates: LocalAudioStates, onRefresh: () -> Unit, onReverseSongOrder: () -> Unit,
-    onUpdateSongOrder: (SongOrder) -> Unit, onReversePlsOrder: () -> Unit,
-    onUpdatePlsOrder: (PlaylistOrder) -> Unit, onSearch: () -> Unit, onHideAudios: () -> Unit,
+    navVM: NavViewModel, defaultMediaDir: IsDefaultMediaOrder, onRefresh: () -> Unit,
+    onReverseSongOrder: (Boolean) -> Unit, onUpdateSongOrder: (SongOrder, Boolean) -> Unit,
+    onReversePlsOrder: () -> Unit, onUpdatePlsOrder: (PlaylistOrder) -> Unit,
+    onReverseAlbumOrder: () -> Unit, onUpdateAlbumOrder: (AlbumOrder) -> Unit,
+    onReverseArtistOrder: () -> Unit, onUpdateArtistOrder: (ArtistOrder) -> Unit,
+    onReverseGenreOrder: () -> Unit, onUpdateGenreOrder: (GenreOrder) -> Unit,
+    onSearch: () -> Unit, onHideAudios: () -> Unit,
     onHideFolders: () -> Unit, onAddSongs: () -> Unit, onShareSongs: () -> Unit,
     onUpdateMetadata: (String) -> Unit, onShowAudios: () -> Unit,
     onSelectAll: () -> Unit, onDeleteSongs: () -> Unit, getUIStyle: GetUIStyle
 ) {
     val ci = ContentIcons(getUIStyle)
+
+    val isNotEmpty by navVM.listNotEmpty.collectAsStateWithLifecycle()
+    val audioStates by navVM.audioStates.collectAsStateWithLifecycle()
 
     if (!audioStates.isSearching) {
         SearchIconButton(ci) { onSearch() }
@@ -70,17 +89,31 @@ fun LocalAudioOptions(
     }
 
     when (audioStates.tab) {
+        LocalMusicTabs.FAVORITES -> {
+            if (!audioStates.isSelecting) AllSongOptions(
+                onReverseSongOrder = { navVM.reverseFavoriteOrder() },
+                onUpdateSongOrder = { navVM.updateFavoriteOrder(it) },
+                getUIStyle = getUIStyle, asc = audioStates.favDirections
+            )
+            else EditSongOptions(
+                onHideOrShow = onHideAudios, onAddSongs = onAddSongs, onShareSongs = onShareSongs,
+                getUIStyle = getUIStyle, hide = true, onUpdateMetadata = onUpdateMetadata,
+                onSelectAll = onSelectAll, onDeleteSongs = onDeleteSongs,
+                enabled = !audioStates.isLoading && isNotEmpty, showMiscOptions = true
+            )
+        }
+
         LocalMusicTabs.LIBRARY -> {
             if (!audioStates.isSelecting) AllSongOptions(
-                onReverseSongOrder = onReverseSongOrder,
-                onUpdateSongOrder = onUpdateSongOrder,
+                onReverseSongOrder = { onReverseSongOrder(false) },
+                onUpdateSongOrder = { onUpdateSongOrder(it, false) },
                 getUIStyle = getUIStyle, asc = audioStates.alDirection
             )
             else EditSongOptions(
                 onHideOrShow = onHideAudios, onAddSongs = onAddSongs, onShareSongs = onShareSongs,
                 getUIStyle = getUIStyle, hide = true, onUpdateMetadata = onUpdateMetadata,
-                onSelectAll = onSelectAll,onDeleteSongs = onDeleteSongs,
-                enabled = !audioStates.isLoading
+                onSelectAll = onSelectAll, onDeleteSongs = onDeleteSongs,
+                enabled = !audioStates.isLoading && isNotEmpty, showMiscOptions = true
             )
 
         }
@@ -91,21 +124,27 @@ fun LocalAudioOptions(
             getUIStyle = getUIStyle, direction = audioStates.plsDirection
         )
 
-        LocalMusicTabs.ALBUMS -> {
+        LocalMusicTabs.ALBUMS -> AlbumOptions(
+            onReverseAlbumOrder = onReverseAlbumOrder, onUpdateAlbumOrder = onUpdateAlbumOrder,
+            isDefault = defaultMediaDir.album,
+            getUIStyle = getUIStyle, direction = audioStates.albumDirection
+        )
 
-        }
+        LocalMusicTabs.ARTISTS -> ArtistOptions(
+            onReverseArtistOrder = onReverseArtistOrder, onUpdateArtistOrder = onUpdateArtistOrder,
+            isDefault = defaultMediaDir.artist,
+            getUIStyle = getUIStyle, direction = audioStates.artistDirection
+        )
 
-        LocalMusicTabs.ARTISTS -> {
-
-        }
-
-        LocalMusicTabs.GENRES -> {
-
-        }
+        LocalMusicTabs.GENRES -> GenreOptions(
+            onReverseGenreOrder = onReverseGenreOrder, onUpdateGenreOrder = onUpdateGenreOrder,
+            isDefault = defaultMediaDir.genre,
+            getUIStyle = getUIStyle, direction = audioStates.genreDirection
+        )
 
         LocalMusicTabs.FOLDERS -> {
             if (audioStates.isSelecting) Text(
-                text = "Hide",
+                text = stringResource(R.string.Hide),
                 modifier = Modifier
                     .padding(start = 2.dp, end = 4.dp)
                     .clickable(enabled = !audioStates.isLoading) { onHideFolders() },
@@ -118,15 +157,43 @@ fun LocalAudioOptions(
                 onHideOrShow = onShowAudios, onAddSongs = onAddSongs,
                 onShareSongs = onShareSongs, getUIStyle = getUIStyle,
                 hide = false, onUpdateMetadata = onUpdateMetadata, onSelectAll = onSelectAll,
-                onDeleteSongs = onDeleteSongs, enabled = !audioStates.isLoading
+                onDeleteSongs = onDeleteSongs, enabled = !audioStates.isLoading && isNotEmpty,
+                showMiscOptions = true
+            ) else AllSongOptions(
+                onReverseSongOrder = { onReverseSongOrder(true) },
+                onUpdateSongOrder = { onUpdateSongOrder(it, true) },
+                getUIStyle = getUIStyle, asc = audioStates.hiddenDirection
             )
         }
     }
 }
 
 @Composable
+fun LibraryRouteOptions(
+    routeFlow: Flow<String>,
+    onSearch: () -> Unit, onShareSongs: () -> Unit,
+    onAddSongs: () -> Unit, onDeleteSongs: () -> Unit,
+    getUIStyle: GetUIStyle
+) {
+    val lbrVM: LibraryBasedRouteVM = viewModel(factory = AppVMProvider.Factory)
+    val ci = ContentIcons(getUIStyle)
+    val isNotEmpty by lbrVM.listNotEmpty.collectAsStateWithLifecycle()
+    val uiStates by lbrVM.uiStates.collectAsStateWithLifecycle()
+    val list by lbrVM.getAudioFiles(routeFlow).collectAsStateWithLifecycle()
+    val onSelectAll: () -> Unit = { lbrVM.selectAll(list) }
+    if (!uiStates.isSearching)
+        SearchIconButton(ci) { onSearch() }
+    if (uiStates.isSelecting) EditSongOptions(
+        onHideOrShow = { }, onAddSongs = onAddSongs, onShareSongs = onShareSongs,
+        getUIStyle = getUIStyle, hide = true, onUpdateMetadata = {},
+        onSelectAll = onSelectAll, onDeleteSongs = onDeleteSongs,
+        enabled = !uiStates.isLoading && isNotEmpty, showMiscOptions = false
+    )
+}
+
+@Composable
 fun PlayListOptions(
-    navVM: NavViewModel, getUIStyle: GetUIStyle,
+    navVM: NavViewModel, getUIStyle: GetUIStyle, onShareSongs: () -> Unit,
     onChangeArt: () -> Unit, onSearch: () -> Unit, onChangeName: () -> Unit
 ) {
     val ci = ContentIcons(getUIStyle)
@@ -136,6 +203,9 @@ fun PlayListOptions(
     val context = LocalContext.current
     val isSelecting by navVM.isSelecting.collectAsStateWithLifecycle()
     val isAdding by navVM.isAdding.collectAsStateWithLifecycle()
+    val isNotEmpty by navVM.listNotEmpty.collectAsStateWithLifecycle()
+    val failedToAddTracks = stringResource(R.string.failed_to_add_tracks)
+    val failedToRemoveTracks = stringResource(R.string.failed_to_delete_tracks)
     PLContent(
         ci, expanded, { expanded = it }, onSearch = onSearch,
         onSubmit = {
@@ -144,7 +214,7 @@ fun PlayListOptions(
                     id = plWithAudio?.playlist?.id,
                     onResult = { navVM.addLocalSongsToPL(navVM.getSelectedSongIds(), it) },
                     onEndSelect = { navVM.endSelect() },
-                    context = context, failureText = "Failed to add songs"
+                    context = context, failureText = failedToAddTracks
                 )
             }
         },
@@ -160,7 +230,8 @@ fun PlayListOptions(
             }
         }, onAdd = { plWithAudio?.let { navVM.startAdding() } },
         isSelecting = isSelecting, isAdding = isAdding,
-        onChangeArt = onChangeArt, onChangeName = onChangeName
+        onChangeArt = onChangeArt, onChangeName = onChangeName, onShareSongs = onShareSongs,
+        enabled = isNotEmpty
     )
 }
 
@@ -185,7 +256,8 @@ private suspend fun result(
 private fun PLContent(
     ci: ContentIcons, expanded: Boolean, onExpanded: (Boolean) -> Unit, onSearch: () -> Unit,
     onSubmit: () -> Unit, onRemove: () -> Unit, onChangeArt: () -> Unit, onChangeName: () -> Unit,
-    onAdd: () -> Unit, isAdding: Boolean, isSelecting: Boolean,
+    onAdd: () -> Unit, onShareSongs: () -> Unit, isAdding: Boolean, isSelecting: Boolean,
+    enabled: Boolean
 ) {
     if (isSelecting && isAdding) {
         SearchIconButton(ci) { onSearch() }
@@ -199,14 +271,23 @@ private fun PLContent(
         Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
             IconButton(
                 onClick = { onExpanded(!expanded) }
-            ) {
-                ci.ContentIcon(Icons.Default.MoreVert)
-            }
+            ) { ci.ContentIcon(Icons.Default.MoreVert) }
             DropdownMenu(expanded = expanded, onDismissRequest = { onExpanded(false) }) {
                 DropdownMenuItem(
-                    text = { Text("Remove") },
-                    trailingIcon = { ci.ContentIcon(painterResource(R.drawable.baseline_remove_circle)) },
-                    onClick = onRemove
+                    text = { Text(stringResource(R.string.Remove)) },
+                    trailingIcon = {
+                        ci.ContentIcon(R.drawable.baseline_remove_circle, enabled = enabled)
+                    },
+                    onClick = onRemove,
+                    enabled = enabled
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.Share)) },
+                    trailingIcon = {
+                        ci.ContentIcon(Icons.Default.Share, enabled = enabled)
+                    },
+                    onClick = onShareSongs,
+                    enabled = enabled
                 )
             }
         }
@@ -221,14 +302,12 @@ private fun PLContent(
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { onExpanded(false) }) {
                 DropdownMenuItem(
-                    text = { Text("Rename") },
+                    text = { Text(stringResource(R.string.Rename)) },
                     onClick = onChangeName
                 )
                 DropdownMenuItem(
                     text = { Text("Change cover image") },
-                    trailingIcon = {
-                        ci.ContentIcon(painterResource(R.drawable.outline_replace_image))
-                    },
+                    trailingIcon = { ci.ContentIcon(R.drawable.outline_replace_image) },
                     onClick = onChangeArt
                 )
             }
@@ -249,11 +328,11 @@ private fun AllSongOptions(
         onToggle = { expanded = !expanded }, onDismiss = { expanded = false }
     ) {
         DropdownMenuItem(
-            text = { Text("Title") },
+            text = { Text(stringResource(R.string.Title)) },
             onClick = { onUpdateSongOrder(SongOrder.Title) }
         )
         DropdownMenuItem(
-            text = { Text("Artist") },
+            text = { Text(stringResource(R.string.Artist)) },
             onClick = { onUpdateSongOrder(SongOrder.Artist) }
         )
         DropdownMenuItem(
@@ -264,11 +343,9 @@ private fun AllSongOptions(
 }
 
 @Composable
-fun AllPLsOptions(
-    onReversePlsOrder: () -> Unit,
-    onUpdatePlsOrder: (PlaylistOrder) -> Unit,
-    getUIStyle: GetUIStyle,
-    direction: Boolean
+private fun AllPLsOptions(
+    onReversePlsOrder: () -> Unit, onUpdatePlsOrder: (PlaylistOrder) -> Unit,
+    getUIStyle: GetUIStyle, direction: Boolean
 ) {
     val ci = ContentIcons(getUIStyle)
 
@@ -279,7 +356,7 @@ fun AllPLsOptions(
         onToggle = { expanded = !expanded }, onDismiss = { expanded = false }
     ) {
         DropdownMenuItem(
-            text = { Text("Name") },
+            text = { Text(stringResource(R.string.Name)) },
             onClick = { onUpdatePlsOrder(PlaylistOrder.Name) }
         )
         DropdownMenuItem(
@@ -289,70 +366,166 @@ fun AllPLsOptions(
     }
 }
 
+@Composable
+private fun AlbumOptions(
+    onReverseAlbumOrder: () -> Unit, onUpdateAlbumOrder: (AlbumOrder) -> Unit,
+    getUIStyle: GetUIStyle, direction: Boolean, isDefault: Boolean
+) {
+    val ci = ContentIcons(getUIStyle)
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    SortingOptionsForML(
+        expanded = expanded, ci = ci, asc = direction,
+        onReverseOrder = onReverseAlbumOrder, isDefault = isDefault,
+        onToggle = { expanded = !expanded }, onDismiss = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.default_language)) },
+            onClick = { onUpdateAlbumOrder(AlbumOrder.Default) }
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.Name)) },
+            onClick = { onUpdateAlbumOrder(AlbumOrder.Name) }
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.Artist)) },
+            onClick = { onUpdateAlbumOrder(AlbumOrder.Artist) }
+        )
+        DropdownMenuItem(
+            text = { Text("Track Count") },
+            onClick = { onUpdateAlbumOrder(AlbumOrder.TrackCount) }
+        )
+
+    }
+}
+
+@Composable
+private fun ArtistOptions(
+    onReverseArtistOrder: () -> Unit, onUpdateArtistOrder: (ArtistOrder) -> Unit,
+    getUIStyle: GetUIStyle, direction: Boolean, isDefault: Boolean
+) {
+    val ci = ContentIcons(getUIStyle)
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    SortingOptionsForML(
+        expanded = expanded, ci = ci, asc = direction,
+        onReverseOrder = onReverseArtistOrder, isDefault = isDefault,
+        onToggle = { expanded = !expanded }, onDismiss = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.default_language)) },
+            onClick = { onUpdateArtistOrder(ArtistOrder.Default) }
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.Name)) },
+            onClick = { onUpdateArtistOrder(ArtistOrder.Name) }
+        )
+        DropdownMenuItem(
+            text = { Text("Track Count") },
+            onClick = { onUpdateArtistOrder(ArtistOrder.TrackCount) }
+        )
+        DropdownMenuItem(
+            text = { Text("Album Count") },
+            onClick = { onUpdateArtistOrder(ArtistOrder.AlbumCount) }
+        )
+
+    }
+}
+
+@Composable
+private fun GenreOptions(
+    onReverseGenreOrder: () -> Unit, onUpdateGenreOrder: (GenreOrder) -> Unit,
+    getUIStyle: GetUIStyle, direction: Boolean, isDefault: Boolean
+) {
+    val ci = ContentIcons(getUIStyle)
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    SortingOptionsForML(
+        expanded = expanded, ci = ci, asc = direction,
+        onReverseOrder = onReverseGenreOrder, isDefault = isDefault,
+        onToggle = { expanded = !expanded }, onDismiss = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.default_language)) },
+            onClick = { onUpdateGenreOrder(GenreOrder.Default) }
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.Name)) },
+            onClick = { onUpdateGenreOrder(GenreOrder.Name) }
+        )
+        DropdownMenuItem(
+            text = { Text("Track Count") },
+            onClick = { onUpdateGenreOrder(GenreOrder.TrackCount) }
+        )
+
+    }
+}
 
 @Composable
 private fun EditSongOptions(
     hide: Boolean, onHideOrShow: () -> Unit, onAddSongs: () -> Unit, onShareSongs: () -> Unit,
     onUpdateMetadata: (String) -> Unit, onSelectAll: () -> Unit, onDeleteSongs: () -> Unit,
-    getUIStyle: GetUIStyle, enabled: Boolean
+    getUIStyle: GetUIStyle, enabled: Boolean, showMiscOptions: Boolean
 ) {
     val ci = ContentIcons(getUIStyle)
     var expanded by rememberSaveable { mutableStateOf(false) }
     val icon =
         if (hide) ImageVector.vectorResource(R.drawable.sharp_hide_source)
         else Icons.Default.CheckCircle
-    val text = if (hide) "Hide" else "Show"
+    val text = if (hide) stringResource(R.string.Hide) else stringResource(R.string.Show)
     Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
         IconButton(onClick = { expanded = !expanded }) {
             ci.ContentIcon(Icons.Default.MoreVert)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Add") },
-                trailingIcon = { ci.ContentIcon(Icons.Default.Add) },
-                onClick = onAddSongs
+                text = { Text(stringResource(R.string.Add)) },
+                trailingIcon = { ci.ContentIcon(Icons.Default.Add, enabled = enabled) },
+                onClick = onAddSongs, enabled = enabled
             )
+            if (showMiscOptions) {
+                DropdownMenuItem(
+                    text = { Text(text) },
+                    trailingIcon = { ci.ContentIcon(icon, enabled = enabled) },
+                    onClick = onHideOrShow, enabled = enabled
+                )
+            }
             DropdownMenuItem(
-                text = { Text(text) },
-                trailingIcon = { ci.ContentIcon(icon) },
-                onClick = onHideOrShow
-
-            )
-            DropdownMenuItem(
-                text = { Text("Select All") },
+                text = { Text(stringResource(R.string.select_all)) },
                 onClick = onSelectAll
             )
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Share") },
-                trailingIcon = { ci.ContentIcon(Icons.Default.Share) },
-                onClick = onShareSongs
+                text = { Text(stringResource(R.string.Share)) },
+                trailingIcon = { ci.ContentIcon(Icons.Default.Share, enabled = enabled) },
+                onClick = onShareSongs, enabled = enabled
             )
 
             DropdownMenuItem(
-                text = { Text("Delete") },
-                trailingIcon = { ci.ContentIcon(Icons.Default.Delete) },
-                onClick = onDeleteSongs
+                text = { Text(stringResource(R.string.Delete)) },
+                trailingIcon = { ci.ContentIcon(Icons.Default.Delete, enabled = enabled) },
+                onClick = onDeleteSongs, enabled = enabled
             )
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("Edit artist") },
-                trailingIcon = { ci.ContentIcon(painterResource(R.drawable.rounded_person_edit)) },
-                onClick = { onUpdateMetadata(TagProperty.ARTIST) },
-                enabled = enabled
-            )
-            DropdownMenuItem(
-                text = { Text("Edit album") },
-                trailingIcon = { ci.ContentIcon(painterResource(R.drawable.baseline_album)) },
-                onClick = { onUpdateMetadata(TagProperty.ALBUM) },
-                enabled = enabled
-            )
-            DropdownMenuItem(
-                text = { Text("Edit genre") },
-                trailingIcon = { ci.ContentIcon(painterResource(R.drawable.rounded_genres)) },
-                onClick = { onUpdateMetadata(TagProperty.GENRE) },
-                enabled = enabled
-            )
+            if (showMiscOptions) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.edit_artist)) },
+                    trailingIcon = {
+                        ci.ContentIcon(R.drawable.rounded_person_edit, enabled = enabled)
+                    },
+                    onClick = { onUpdateMetadata(TagProperty.ARTIST) },
+                    enabled = enabled
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.edit_album)) },
+                    trailingIcon = { ci.ContentIcon(R.drawable.baseline_album, enabled = enabled) },
+                    onClick = { onUpdateMetadata(TagProperty.ALBUM) },
+                    enabled = enabled
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.edit_genre)) },
+                    trailingIcon = { ci.ContentIcon(R.drawable.rounded_genres, enabled = enabled) },
+                    onClick = { onUpdateMetadata(TagProperty.GENRE) },
+                    enabled = enabled
+                )
+            }
         }
     }
 }
@@ -361,7 +534,7 @@ private fun EditSongOptions(
 private fun SortingOptionsForML(
     expanded: Boolean, ci: ContentIcons, asc: Boolean,
     onReverseOrder: () -> Unit, onToggle: () -> Unit, onDismiss: () -> Unit,
-    content: @Composable (ColumnScope.() -> Unit)
+    isDefault: Boolean = false, content: @Composable (ColumnScope.() -> Unit)
 ) {
     Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
         IconButton(onClick = onToggle) {
@@ -375,11 +548,13 @@ private fun SortingOptionsForML(
                 textAlign = TextAlign.Center
             )
             HorizontalDivider()
-            DropdownMenuItem(
-                onClick = onReverseOrder,
-                text = { Text(if (asc) "Ascending" else "Descending") }
-            )
-            HorizontalDivider()
+            if (!isDefault) {
+                DropdownMenuItem(
+                    onClick = onReverseOrder,
+                    text = { Text(if (asc) "Ascending" else "Descending") }
+                )
+                HorizontalDivider()
+            }
             content()
         }
     }
@@ -398,18 +573,19 @@ fun RecentQueries(
         IconButton(onClick = onToggle) { ci.ContentIcon(icon) }
         DropdownMenu(
             expanded = expanded, onDismissRequest = onDismiss,
+            properties = PopupProperties(dismissOnClickOutside = false),
             modifier = Modifier
                 .fillMaxWidth(0.85f)
         ) {
             if (querySet.isEmpty()) Text(
-                text = "No Recent Queries",
+                text = stringResource(R.string.no_recent_queries),
                 modifier = Modifier.padding(4.dp),
                 style = MaterialTheme.typography.bodyMedium
             )
             else querySet.forEachIndexed { index, it ->
                 DropdownMenuItem(
                     text = { Text(it) },
-                    onClick = { updateQuery(it) }
+                    onClick = { updateQuery(it); onDismiss() }
                 )
                 if (index != querySet.indices.last)
                     HorizontalDivider()

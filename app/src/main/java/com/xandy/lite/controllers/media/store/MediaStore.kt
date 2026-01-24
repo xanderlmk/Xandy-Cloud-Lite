@@ -8,23 +8,21 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
-import androidx.compose.runtime.MutableIntState
 import androidx.core.content.FileProvider
 import androidx.core.database.getIntOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.xandy.lite.R
 import androidx.core.net.toUri
+import androidx.media3.common.MediaItem
 import com.kyant.taglib.TagLib
 import com.kyant.taglib.TagProperty
 import com.xandy.lite.db.daos.AudioDao
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.models.application.XANDY_CLOUD
-import com.xandy.lite.models.ui.MediaItemWithCreatedOn
 import com.xandy.lite.models.ui.drawableResUri
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import java.io.File
 import java.util.Date
 import java.util.UUID
@@ -54,6 +52,8 @@ data class ImportedAudioDetails(
     val audio: AudioFile, val mrp: MediaRowPicture,
     val songIdNotNull: Boolean, val modified: Boolean
 )
+
+data class AudioPicToUpdate(val audio: AudioFile, val art: Uri)
 
 private fun queryMediaRows(context: Context, volumes: List<String>): List<MediaRow> {
     val list = mutableListOf<MediaRow>()
@@ -106,16 +106,31 @@ private fun queryMediaRows(context: Context, volumes: List<String>): List<MediaR
     return list
 }
 
+private const val CHUNK_SIZE = 20
+
 /**
  * Returns media files
  */
-suspend fun loadAudioFiles(
+fun loadAudioFiles(
     context: Context,
     volumes: List<String>,
     audioDao: AudioDao
-): List<ImportedAudioDetails> {
-    val mutableList = mutableListOf<ImportedAudioDetails>()
+): Flow<List<ImportedAudioDetails>> = flow {
+    val mutableList = ArrayList<ImportedAudioDetails>(CHUNK_SIZE)
     val pictureUri = context.drawableResUri(R.drawable.unknown_track)
+    val onEmit: suspend () -> Unit = {
+        try {
+            val pairs = mutableList.map { Pair(it.audio, it.modified) }
+            audioDao.upsertAudios(pairs)
+        } catch (e: Exception) {
+            Log.e(
+                XANDY_CLOUD,
+                "Failed to upsert audio files to DB: ${e.printStackTrace()}"
+            )
+        }
+        emit(mutableList.toList())
+        mutableList.clear()
+    }
     try {
         val rows = queryMediaRows(context, volumes)
         for (row in rows) {
@@ -146,7 +161,7 @@ suspend fun loadAudioFiles(
                         fileId = row.id,
                         uri = row.contentUri,
                         displayName = row.displayName,
-                        title = title ?: row.displayName, artist = artist ?: "Unknown Artist",
+                        title = title ?: row.displayName, artist = artist,
                         album = album, genre = genre,
                         year = row.year ?: dateParts.year,
                         day = dateParts.day, month = dateParts.month,
@@ -171,7 +186,7 @@ suspend fun loadAudioFiles(
                         id = uuid, fileId = row.id,
                         uri = row.contentUri,
                         displayName = row.displayName,
-                        title = row.displayName, artist = "Unknown Artist",
+                        title = row.displayName, artist = null,
                         album = null, genre = null, year = row.year, day = null, month = null,
                         durationMillis = row.duration,
                         picture = pictureUri,
@@ -184,16 +199,26 @@ suspend fun loadAudioFiles(
                     songIdNotNull = false, dbDateModified != dateModified
                 )
             }
+            if (mutableList.size >= CHUNK_SIZE) onEmit()
         }
     } catch (e: Exception) {
         Log.e(
             XANDY_CLOUD, "Failed to load local media at ${mutableList[mutableList.lastIndex]}: $e"
         )
     }
-    return mutableList
+    onEmit()
 }
 
-data class DateParts(val year: Int?, val month: Int?, val day: Int?)
+data class DateParts(val year: Int?, val month: Int?, val day: Int?) {
+    override fun toString(): String {
+        return when {
+            month == null && day == null && year == null -> ""
+            month == null && day == null -> "$year"
+            day == null -> "$month-$year"
+            else -> "$month-$day-$year"
+        }
+    }
+}
 
 
 private fun parseTagDate(dateStr: String?): DateParts {
@@ -297,9 +322,9 @@ private fun getArtData(uri: Uri, context: Context): Uri? {
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cacheFile)
 }
 
-fun List<MediaItemWithCreatedOn>.getAllImages() = this.mapNotNull {
-    if (it.mediaItem.mediaMetadata.artworkUri?.scheme == "android.resource"
-        && it.mediaItem.mediaMetadata.artworkUri?.path?.contains("drawable/unknown_track") == true
+fun List<MediaItem>.getAllImages() = this.mapNotNull {
+    if (it.mediaMetadata.artworkUri?.scheme == "android.resource"
+        && it.mediaMetadata.artworkUri?.path?.contains("drawable/unknown_track") == true
     ) null
-    else it.mediaItem.mediaMetadata.artworkUri
+    else it.mediaMetadata.artworkUri
 }

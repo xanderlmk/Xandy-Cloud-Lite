@@ -2,19 +2,16 @@ package com.xandy.lite.db.song.repo
 
 import android.app.PendingIntent
 import android.net.Uri
-import androidx.compose.runtime.MutableIntState
-import androidx.media3.common.Tracks
+import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
-import com.xandy.lite.controllers.media.store.ImportedAudioDetails
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.BucketWithAudio
 import com.xandy.lite.db.tables.AudioWithPls
-import com.xandy.lite.db.tables.LyricLine
 import com.xandy.lite.db.tables.Lyrics
-import com.xandy.lite.db.tables.LyricsWithAudio
 import com.xandy.lite.db.tables.Playlist
 import com.xandy.lite.db.tables.PlaylistSongOrder
 import com.xandy.lite.models.AudioIds
+import com.xandy.lite.models.application.AppValues
 import com.xandy.lite.models.ui.Album
 import com.xandy.lite.models.ui.Artist
 import com.xandy.lite.models.ui.AudioUIState
@@ -23,46 +20,50 @@ import com.xandy.lite.models.ui.Genre
 import com.xandy.lite.models.ui.InsertResult
 import com.xandy.lite.models.ui.LocalMusicTabs
 import com.xandy.lite.models.ui.LocalPlUIState
-import com.xandy.lite.models.ui.MediaItemWithCreatedOn
+import com.xandy.lite.models.ui.MediaState
 import com.xandy.lite.models.ui.PlaylistWithCount
 import com.xandy.lite.models.ui.SongDetails
 import com.xandy.lite.models.ui.UpdateResult
+import com.xandy.lite.models.ui.order.by.OrderAlbumsBy
+import com.xandy.lite.models.ui.order.by.OrderArtistBy
+import com.xandy.lite.models.ui.order.by.OrderGenresBy
 import com.xandy.lite.models.ui.order.by.OrderPlsBy
 import com.xandy.lite.models.ui.order.by.OrderQueueBy
 import com.xandy.lite.models.ui.order.by.OrderSongsBy
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 interface SongRepository {
-
+    val scope: CoroutineScope
+    val appValues: StateFlow<AppValues>
     val pickedSong: Flow<AudioWithPls?>
 
     /* <-- Player related stuff --> */
     val mediaController: StateFlow<MediaController?>
-    val tracks: StateFlow<Tracks>
     val isPlaying: StateFlow<Boolean>
     val isLoading: StateFlow<Boolean>
     val repeatMode: Flow<Int>
     val shuffleEnabled: Flow<Boolean>
     val durationMs: StateFlow<Long>
+    fun handleSkipNext(shuffleEnabled: Boolean, repeatMode: Int, mc: MediaController)
 
     /** Song position in milliseconds */
     val positionMs: StateFlow<Long>
 
     /** Sorted Queue based on [OrderQueueBy] */
-    val sortedQueue: Flow<List<MediaItemWithCreatedOn>>
+    val sortedQueue: Flow<List<MediaItem>>
 
     /**
      * An unsorted Queue to properly play the correct song upon picking a song within the queue
      * when it is sorted in a different manner
      */
-    val unsortedQueue: Flow<List<MediaItemWithCreatedOn>>
+    val unsortedQueue: Flow<List<MediaItem>>
     fun updatePosition(position: Long)
     fun updateDuration(duration: Long)
     fun updateMediaController(mc: MediaController)
     fun resetMediaController()
     fun getMediaController(): MediaController?
-    fun updateTracks(tracks: Tracks)
     fun updateIsPlaying(isPlaying: Boolean)
     fun updateIsLoading(isLoading: Boolean)
 
@@ -81,26 +82,44 @@ interface SongRepository {
 
     /* <-- Local audio files --> */
     val audioOrderedBy: StateFlow<OrderSongsBy>
+    val hiddenOrderedBy: StateFlow<OrderSongsBy>
+    val favOrderedBy: StateFlow<OrderSongsBy>
     val localPlsOrderedBy: StateFlow<OrderPlsBy>
+    val albumOrderedBy: StateFlow<OrderAlbumsBy>
+    val artistOrderedBy: StateFlow<OrderArtistBy>
+    val genreOrderedBy: StateFlow<OrderGenresBy>
     val pickedQueueName: Flow<String>
 
     /** Update the order of the local audio list */
     fun updateLocalALOrder(orderSongsBy: OrderSongsBy)
 
+    /** Update the order of the hidden audio list */
+    fun updateHiddenOrder(orderSongsBy: OrderSongsBy)
+
+    fun updateFavoriteOrder(orderSongsBy: OrderSongsBy)
+
     /** Update the order of the local playlist */
     fun updateLocalPLOrder(orderPlsBy: OrderPlsBy)
+
+    /** Update the order of the albums */
+    fun updateAlbumOrder(orderAlbumsBy: OrderAlbumsBy)
+
+    /** Update the order of the artists */
+    fun updateArtistOrder(orderArtistBy: OrderArtistBy)
+
+    fun updateGenreOrder(orderGenresBy: OrderGenresBy)
+
     val audioFiles: Flow<AudioUIState>
-    val hiddenAudio: Flow<List<AudioFile>>
+    val hiddenAudios: Flow<List<AudioFile>>
+    /** A list of the favorite tracks */
+    val favorites: Flow<List<AudioFile>>
 
     /** Local playlists with their songs, and the count of songs it has */
     val localPlaylists: Flow<LocalPlUIState>
     val filesLoading: StateFlow<Boolean>
     val gettingAudioPics: StateFlow<Boolean>
-    suspend fun getMediaFiles(): List<ImportedAudioDetails>
 
-    suspend fun updateMediaFiles(
-        iad: List<ImportedAudioDetails>
-    ): Pair<PendingIntent, List<AudioIds>>?
+    suspend fun updateMediaFiles(): Pair<PendingIntent, List<AudioIds>>?
 
     suspend fun updateSongIdTag(ids: List<AudioIds>): Boolean
 
@@ -113,14 +132,16 @@ interface SongRepository {
 
     /** Update local playlist name to get the picked playlist */
     suspend fun updateLocalPlUUID(n: String)
-    suspend fun updateLocalAlbumName(n: String)
-    suspend fun updateLocalArtistName(n: String)
+    suspend fun updateLocalAlbumName(n: MediaState)
+    suspend fun updateLocalArtistName(n: MediaState)
+    suspend fun updateLocalGenreName(n: MediaState)
+    suspend fun updateLocalBucketKey(p: Pair<String, Long>)
+
     suspend fun findPlaylistUUID(name: String): String
     suspend fun addLocalSongsToPl(songIds: List<String>, playlistId: String): Boolean
     suspend fun removeLocalSongsFromPl(songIds: List<String>, playlistId: String): Boolean
     val bucketsWithAudio: Flow<List<BucketWithAudio>>
     val pickedLocalBucket: Flow<BucketWithAudio?>
-    suspend fun updateLocalBucketKey(p: Pair<String, Long>)
     suspend fun hideBuckets(set: Set<Pair<String, Long>>): Boolean
     val localAlbums: Flow<List<Album>>
     val pickedLocalAlbum: Flow<Album?>
@@ -129,7 +150,8 @@ interface SongRepository {
 
     val localGenres: Flow<List<Genre>>
     val pickedLocalGenre: Flow<Genre?>
-    suspend fun updateLocalGenreName(n: String)
+
+    fun getAfsByIds(ids: List<String>): Flow<List<AudioFile>>
 
     /** Delete the audio file from the system and the db */
     suspend fun deleteLocalAudios(list: List<String>): DeleteResult
@@ -145,21 +167,34 @@ interface SongRepository {
 
     /** Show the hidden file */
     suspend fun showAudioFile(uri: String): Boolean
+
+    /** Add to favorites */
+    suspend fun addToFavorites(uri: Uri): InsertResult
+
+    suspend fun removeFromFavorites(uri: Uri): Boolean
+
     suspend fun updateAudioTags(newAudio: AudioFile, lyrics: Lyrics?): UpdateResult
 
     /** Update picked audio uri */
     fun updateAudioUri(uri: String)
 
     /** Maps the lastest value of the audioUri */
-    val pickedAudio: Flow<AudioWithPls?>
+    val pickedAudioToEdit: Flow<AudioWithPls?>
     suspend fun deleteLocalPlaylist(playlist: Playlist): Boolean
     suspend fun addPlWithSongs(songIds: List<String>, name: String): Pair<InsertResult, String>
     suspend fun updatePLSongOrder(order: PlaylistSongOrder)
     val allMediaArtwork: Flow<List<Uri>>
     val queueOrder: StateFlow<OrderQueueBy>
-    suspend fun setNewQueue(list: List<MediaItemWithCreatedOn>, name: String)
-    suspend fun addToQueue(newQueueIds: List<String>)
+    val priorityList: StateFlow<List<AudioFile>>
+    suspend fun setNewQueue(list: List<MediaItem>, name: String)
+    suspend fun updateQueue(newQueueIds: List<String>)
     fun updateQueueOrder(orderQueueBy: OrderQueueBy)
+    fun addItemToPriorityQueue(af: AudioFile): InsertResult
+
+    fun getCurrentPriorityItem(): Pair<String, Int>
+    fun clearPriorityItemStates()
+
+    fun addItemsToPriorityQueue(afs: List<AudioFile>): InsertResult
 
     suspend fun changePlaylistName(
         newName: String, name: String, pickedPlUUID: String?

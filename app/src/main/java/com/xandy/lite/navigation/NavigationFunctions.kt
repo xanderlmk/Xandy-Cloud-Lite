@@ -41,7 +41,7 @@ import my.nanihadesuka.compose.ScrollbarSettings
 
 
 @Composable
-fun ImagePicker(
+internal fun ImagePicker(
     artworkList: List<Uri>, isLandscape: Boolean, getUIStyle: GetUIStyle,
     onImagePicked: (Uri) -> Unit, showModal: ShowModalFor, onDismiss: () -> Unit
 ) {
@@ -158,7 +158,7 @@ private fun LocalArtwork(
 }
 
 @Composable
-fun WithRequestLauncher(
+internal fun WithRequestLauncher(
     onResultOk: () -> Unit,
     content: @Composable (ManagedActivityResultLauncher<IntentSenderRequest, ActivityResult>) -> Unit
 ) {
@@ -174,7 +174,7 @@ fun WithRequestLauncher(
 }
 
 @Composable
-fun WithDeleteModalAndLauncher(
+internal fun WithDeleteModalAndLauncher(
     onResultOk: () -> Unit, showModal: Boolean, onDismissRequest: () -> Unit, string: String?,
     onDelete: (ManagedActivityResultLauncher<IntentSenderRequest, ActivityResult>) -> Unit,
     content: @Composable (ManagedActivityResultLauncher<IntentSenderRequest, ActivityResult>) -> Unit

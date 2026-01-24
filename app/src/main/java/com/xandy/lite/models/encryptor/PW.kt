@@ -9,7 +9,7 @@ private const val PART_THREE = BuildConfig.PART_THREE
 private const val PART_FOUR = BuildConfig.PART_FOUR
 private const val PART_FIVE = BuildConfig.PART_FIVE
 
-object PW {
+internal object PW {
     val one = String(PART_ONE)
     val two = String(PART_TWO)
     val three = String(PART_THREE)

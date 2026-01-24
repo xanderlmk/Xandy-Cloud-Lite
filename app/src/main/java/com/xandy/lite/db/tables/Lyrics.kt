@@ -10,13 +10,12 @@ import androidx.room.PrimaryKey
 import com.xandy.lite.db.tables.TranslatedLyrics.Companion.write
 import com.xandy.lite.db.tables.TranslatedText.Plain
 import com.xandy.lite.models.LongRangeAsString
+import com.xandy.lite.models.XCToast
 import com.xandy.lite.models.application.XANDY_CLOUD
 import kotlinx.parcelize.Parceler
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.SetSerializer
-import kotlinx.serialization.json.Json
 import java.util.UUID
 import kotlin.collections.map
 import kotlin.collections.toList
@@ -65,6 +64,29 @@ data class Lyrics(
 
         override fun create(parcel: Parcel): Lyrics = Lyrics(parcel)
     }
+
+    fun isScrollBased() = this.pronunciation?.lyrics is TranslatedText.Scroll ||
+            this.translation?.lyrics is TranslatedText.Scroll
+
+    /** Returns a message if it is NOT valid */
+    fun isNotValid(
+        toast: XCToast, scrollSet: List<LyricLine>,
+        translationSet: List<LyricLine>, pronunciationSet: List<LyricLine>
+    ) =
+        when {
+            this.plain.isBlank() -> toast.plainIsBlank
+            this.scroll?.all { it.text.isBlank() } ?: scrollSet.takeIf { it.isNotEmpty() }
+                ?.all { it.text.isBlank() } ?: false -> toast.scrollIsBlank
+
+            this.translation?.lyrics?.isBlank() ?: translationSet.takeIf { it.isNotEmpty() }
+                ?.all { it.text.isBlank() } ?: false -> toast.translatedIsBlank
+
+            this.pronunciation?.lyrics?.isBlank() ?: pronunciationSet.takeIf { it.isNotEmpty() }
+                ?.all { it.text.isBlank() } ?: false -> toast.pronunciationIsBlank
+
+            else -> null
+        }
+
 }
 
 @Serializable
@@ -76,6 +98,7 @@ data class LyricLine(
 ) : Parcelable {
     @Serializable
     val id = UUID.randomUUID().toString()
+
     constructor(parcel: Parcel) : this(
         LongRange(parcel.readLong(), parcel.readLong()),
         parcel.readString()!!
@@ -158,6 +181,11 @@ sealed class TranslatedText : Parcelable {
 
             override fun create(parcel: Parcel): Scroll = Scroll(parcel)
         }
+    }
+
+    fun isBlank() = when (this) {
+        is Plain -> this.t.isBlank()
+        is Scroll -> this.set.all { it.text.isBlank() }
     }
 }
 

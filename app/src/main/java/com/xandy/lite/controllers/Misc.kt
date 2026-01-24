@@ -5,10 +5,9 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.Log
 import androidx.core.graphics.scale
 import androidx.core.net.toUri
-import androidx.lifecycle.viewModelScope
+import androidx.datastore.preferences.core.edit
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
@@ -17,22 +16,29 @@ import com.xandy.lite.db.tables.AudioWithPls
 import com.xandy.lite.db.tables.BucketWithAudio
 import com.xandy.lite.db.tables.LyricLine
 import com.xandy.lite.db.tables.Lyrics
+import com.xandy.lite.db.tables.createdOn
+import com.xandy.lite.db.tables.itemKey
 import com.xandy.lite.db.tables.toMediaItems
-import com.xandy.lite.db.tables.toMediaItemsWithCreatedOn
-import com.xandy.lite.models.application.XANDY_CLOUD
-import com.xandy.lite.models.itemKey
+import com.xandy.lite.models.application.AppStrings
+import com.xandy.lite.models.application.AppValues
+import com.xandy.lite.models.application.dataStore
 import com.xandy.lite.models.ui.Album
 import com.xandy.lite.models.ui.Artist
 import com.xandy.lite.models.ui.AudioUIState
 import com.xandy.lite.models.ui.Genre
 import com.xandy.lite.models.ui.LocalPlUIState
-import com.xandy.lite.models.ui.MediaItemWithCreatedOn
+import com.xandy.lite.models.ui.MediaState
 import com.xandy.lite.models.ui.PlaylistWithCount
 import com.xandy.lite.models.ui.SongDetails
+import com.xandy.lite.models.ui.isBlank
+import com.xandy.lite.models.ui.order.by.OrderAlbumsBy
+import com.xandy.lite.models.ui.order.by.OrderArtistBy
+import com.xandy.lite.models.ui.order.by.OrderGenresBy
 import com.xandy.lite.models.ui.order.by.OrderPlsBy
 import com.xandy.lite.models.ui.order.by.OrderQueueBy
 import com.xandy.lite.models.ui.order.by.OrderSongsBy
 import com.xandy.lite.models.ui.order.by.isAscending
+import com.xandy.lite.widget.XandyWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -42,7 +48,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Date
@@ -119,32 +124,31 @@ private fun resizeBitmapMaintainingAspectRatio(
     return bitmap.scale(targetWidth, targetHeight)
 }
 
-fun songComparator(order: OrderQueueBy): Comparator<MediaItemWithCreatedOn> =
+private fun OrderQueueBy.songComparator(): Comparator<MediaItem> =
     Comparator { a, b ->
-        when (order) {
-            is OrderQueueBy.TitleASC -> a.mediaItem.title()
-                .compareTo(b.mediaItem.title(), ignoreCase = true)
+        when (this) {
+            is OrderQueueBy.TitleASC -> a.title()
+                .compareTo(b.title(), ignoreCase = true)
 
-            is OrderQueueBy.TitleDESC -> b.mediaItem.title()
-                .compareTo(a.mediaItem.title(), ignoreCase = true)
+            is OrderQueueBy.TitleDESC -> b.title()
+                .compareTo(a.title(), ignoreCase = true)
 
             is OrderQueueBy.CreatedOnASC -> {
-                val da: Date = a.createdOn
-                val db: Date = b.createdOn
+                val da: Date = a.createdOn()
+                val db: Date = b.createdOn()
                 da.compareTo(db)
             }
 
             is OrderQueueBy.CreatedOnDESC -> {
-                val da: Date = a.createdOn
-                val db: Date = b.createdOn
+                val da: Date = a.createdOn()
+                val db: Date = b.createdOn()
                 db.compareTo(da)
             }
 
-            is OrderQueueBy.ArtistASC -> a.mediaItem.artist()
-                .compareTo(b.mediaItem.artist(), ignoreCase = true)
+            is OrderQueueBy.ArtistASC -> a.artist().compareTo(b.artist(), ignoreCase = true)
 
-            is OrderQueueBy.ArtistDESC -> b.mediaItem.artist()
-                .compareTo(a.mediaItem.artist(), ignoreCase = true)
+            is OrderQueueBy.ArtistDESC -> b.artist()
+                .compareTo(a.artist(), ignoreCase = true)
 
             is OrderQueueBy.Default -> 0
         }
@@ -155,36 +159,36 @@ private fun MediaItem.artist() = this.mediaMetadata.artist?.toString() ?: "Unkno
 
 fun combineMCWithPickedSong(
     mediaController: StateFlow<MediaController?>, pickedSong: Flow<AudioWithPls?>,
-    unknownTrackUri: Uri
-): Flow<SongDetails?> = combine(mediaController, pickedSong) { controller, a ->
+    appValues: StateFlow<AppValues>
+): Flow<SongDetails?> = combine(mediaController, pickedSong, appValues) { controller, a, values ->
     val mediaMetadata = controller?.currentMediaItem?.mediaMetadata
     val id =
         a?.song?.id ?: controller?.currentMediaItem?.itemKey() ?: return@combine null
     if (mediaMetadata == null && a == null) null
     else {
-        val sd = combineSongWithMediaMetadata(a, mediaMetadata, unknownTrackUri, id)
+        val sd = combineSongWithMediaMetadata(a, mediaMetadata, values, id)
         //Log.i("Xandy-Cloud", "$sd")
         sd
     }
 }.flowOn(Dispatchers.Main.limitedParallelism(1, "Song Details"))
 
 private fun combineSongWithMediaMetadata(
-    af: AudioWithPls?, item: MediaMetadata?, unknownTrackUri: Uri, id: String
+    af: AudioWithPls?, item: MediaMetadata?, appValues: AppValues, id: String
 ): SongDetails {
-    val title = af?.song?.title ?: item?.title ?: "Unknown Title"
-    val artist = af?.song?.artist ?: item?.artist ?: "Unknown Artist"
+    val title = (af?.song?.title ?: item?.title)?.takeIf { it.isNotBlank() } ?: appValues.unknown
+    val artist = af?.song?.artist ?: appValues.unknownArtist
     val album = af?.song?.album ?: item?.albumTitle
-    val artwork = af?.song?.picture ?: item?.artworkUri ?: unknownTrackUri
+    val artwork = af?.song?.picture ?: item?.artworkUri ?: appValues.unknownTrackUri
     // Log.i(XANDY_CLOUD, "${af?.lyrics}")
     return SongDetails(
-        id, title.toString(), artist.toString(), album?.toString(), artwork,
+        id, title.toString(), artist, album?.toString(), artwork,
         af?.lyrics?.refineScroll()
     )
 }
 
 private fun Lyrics.refineScroll() = this.copy(scroll = scroll.insertGapPlaceholders())
 
-private fun Set<LyricLine>?.insertGapPlaceholders(thresholdMs: Long = 1_000L): Set<LyricLine> {
+private fun Set<LyricLine>?.insertGapPlaceholders(thresholdMs: Long = 3_000L): Set<LyricLine> {
     val sorted = this?.sortedBy { it.range.first } ?: return emptySet()
     if (sorted.isEmpty()) return emptySet()
 
@@ -212,17 +216,17 @@ private fun Set<LyricLine>?.insertGapPlaceholders(thresholdMs: Long = 1_000L): S
 
 
 fun combinePickedUUIDWithPl(
-    name: Flow<String>, localPlaylists: Flow<LocalPlUIState>
-): Flow<PlaylistWithCount?> = combine(name, localPlaylists) { n, pls ->
-    if (n.isBlank() || pls.list.isEmpty()) null
-    else pls.list.find { it.playlist.id == n }
+    uuid: Flow<String>, localPlaylists: Flow<LocalPlUIState>
+): Flow<PlaylistWithCount?> = combine(uuid, localPlaylists) { id, pls ->
+    if (id.isBlank() || pls.list.isEmpty()) null
+    else pls.list.find { it.playlist.id == id }
 }
 
 fun combinePickedNameWithLocalAlbum(
-    name: Flow<String>, localAlbums: Flow<List<Album>>
-): Flow<Album?> = combine(name, localAlbums) { n, albums ->
+    state: Flow<MediaState>, localAlbums: Flow<List<Album>>
+): Flow<Album?> = combine(state, localAlbums) { n, albums ->
     if (n.isBlank() || albums.isEmpty()) null
-    else albums.find { it.name == n.trim() }
+    else albums.find { it.name == n.key.trim() && it.songs.first().id == n.first }
 }
 
 fun combineBucketKeyWithLocalBucket(
@@ -233,43 +237,44 @@ fun combineBucketKeyWithLocalBucket(
 }
 
 fun combinePickedNameWithLocalGenre(
-    name: Flow<String>, localGenres: Flow<List<Genre>>
-): Flow<Genre?> = combine(name, localGenres) { n, genres ->
-    if (n.isEmpty() || genres.isEmpty()) null
-    else genres.find { it.name == n.trim() }
+    state: Flow<MediaState>, localGenres: Flow<List<Genre>>
+): Flow<Genre?> = combine(state, localGenres) { n, genres ->
+    if (n.isBlank() || genres.isEmpty()) null
+    else genres.find { it.name == n.key.trim() && it.songs.first().id == n.first }
 }
 
 fun combinePickedNameWithLocalArtist(
-    name: Flow<String>, localArtists: Flow<List<Artist>>
-): Flow<Artist?> = combine(name, localArtists) { n, artists ->
-    if (n.isEmpty() || artists.isEmpty()) null
-    else artists.find { it.name == n.trim() }
+    state: Flow<MediaState>, localArtists: Flow<List<Artist>>
+): Flow<Artist?> = combine(state, localArtists) { n, artists ->
+    if (n.isBlank() || artists.isEmpty()) null
+    else artists.find { it.name == n.key.trim() && it.songs.first().id == n.first }
 }
 
 /** Sorted queue */
 fun combineQueueMediaItems(
     queue: Flow<List<String>>,
-    allMediaItems: Flow<List<MediaItemWithCreatedOn>>, queueOrder: StateFlow<OrderQueueBy>
+    allMediaItems: Flow<List<MediaItem>>, queueOrder: StateFlow<OrderQueueBy>
 ) = combine(queue, allMediaItems, queueOrder) { queueIds, items, order ->
-    val itemsByKey = items.associateBy { it.mediaItem.itemKey() }
-    queueIds.mapNotNull { id -> itemsByKey[id] }.sortedWith(songComparator(order))
+    val itemsByKey = items.associateBy { it.itemKey() }
+    queueIds.mapNotNull { id -> itemsByKey[id] }.sortedWith(order.songComparator())
 }
 
 /** Unsorted queue */
 fun combineQueueMediaItems(
-    queue: Flow<List<String>>, allMediaItems: Flow<List<MediaItemWithCreatedOn>>
+    queue: Flow<List<String>>, allMediaItems: Flow<List<MediaItem>>
 ) = combine(queue, allMediaItems) { queueIds, items ->
-    val itemsByKey = items.associateBy { it.mediaItem.itemKey() }
+    val itemsByKey = items.associateBy { it.itemKey() }
     queueIds.mapNotNull { id -> itemsByKey[id] }
 }
 
 /** combine all audio and hidden songs into one list */
 fun combineAllMediaItems(
-    audioFiles: Flow<AudioUIState>, hiddenAudio: Flow<List<AudioFile>>
-) = combine(audioFiles, hiddenAudio) { shown, hidden ->
-    val list = shown.list.map { it.song }.toMediaItemsWithCreatedOn() +
-            hidden.toMediaItemsWithCreatedOn()
-    val distinctList = list.distinctBy { it.mediaItem.itemKey() }
+    audioFiles: Flow<AudioUIState>, hiddenAudio: Flow<List<AudioFile>>,
+    favorites: Flow<List<AudioFile>>, appStrings: StateFlow<AppStrings>
+) = combine(audioFiles, hiddenAudio, favorites, appStrings) { shown, hidden, fav, strings ->
+    val list = shown.list.map { it.song }.toMediaItems(strings) + fav.toMediaItems(strings) +
+            hidden.toMediaItems(strings)
+    val distinctList = list.distinctBy { it.itemKey() }
     distinctList
 }
 
@@ -287,6 +292,27 @@ fun getPlsOrderedBy(
     initialValue = plsBy.value.isAscending()
 )
 
+fun getAlbumOrderedBy(
+    viewModelScope: CoroutineScope, albumsBy: StateFlow<OrderAlbumsBy>, timeout: Long
+) = albumsBy.map { it.isAscending() }.stateIn(
+    scope = viewModelScope, started = SharingStarted.WhileSubscribed(timeout),
+    initialValue = albumsBy.value.isAscending()
+)
+
+fun getArtistOrderedBy(
+    viewModelScope: CoroutineScope, artistBy: StateFlow<OrderArtistBy>, timeout: Long
+) = artistBy.map { it.isAscending() }.stateIn(
+    scope = viewModelScope, started = SharingStarted.WhileSubscribed(timeout),
+    initialValue = artistBy.value.isAscending()
+)
+
+fun getGenreOrderedBy(
+    viewModelScope: CoroutineScope, order: StateFlow<OrderGenresBy>, timeout: Long
+) = order.map { it.isAscending() }.stateIn(
+    scope = viewModelScope, started = SharingStarted.WhileSubscribed(timeout),
+    initialValue = order.value.isAscending()
+)
+
 fun getQueueOrderedBy(
     viewModelScope: CoroutineScope, order: StateFlow<OrderQueueBy>, timeout: Long
 ) = order.map { it.isAscending() }.stateIn(
@@ -294,24 +320,5 @@ fun getQueueOrderedBy(
     initialValue = order.value.isAscending()
 )
 
-
-object Controller {
-    fun addToQueue(
-        mediaController: MediaController?, list: List<AudioFile>,
-        currentQueue: List<MediaItemWithCreatedOn>, onAddToQueue: (List<String>) -> Unit
-    ): Boolean = mediaController?.let { controller ->
-        var exists = false
-        val idSet = currentQueue.map { it.mediaItem.itemKey() }.toSet()
-        val newItems = list.mapNotNull {
-            if (it.id in idSet) {
-                exists = true
-                null
-            } else it
-        }
-        val mediaItems = newItems.toMediaItems()
-        val newQueueIds = idSet.toList() + newItems.map { it.id }
-        controller.addMediaItems(mediaItems)
-        onAddToQueue(newQueueIds)
-        return@let exists
-    } ?: false
-}
+suspend fun Context.updateIsPlaying(isPlaying: Boolean) =
+    this.dataStore.edit { settings -> settings[XandyWidget.playingKey] = isPlaying }

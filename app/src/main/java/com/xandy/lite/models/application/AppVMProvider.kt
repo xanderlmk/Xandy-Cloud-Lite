@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.xandy.lite.controllers.view.models.AddToLocalPlVM
 import com.xandy.lite.controllers.view.models.EditAudioVM
+import com.xandy.lite.controllers.view.models.LibraryBasedRouteVM
 import com.xandy.lite.controllers.view.models.LocalAlbumVM
 import com.xandy.lite.controllers.view.models.LocalArtistVM
 import com.xandy.lite.controllers.view.models.LocalFolderVM
@@ -29,7 +30,9 @@ object AppVMProvider {
             )
         }
         initializer {
-            PickedSongVM(xandyCloudApplication().container.songRepository)
+            PickedSongVM(
+                xandyCloudApplication().container.songRepository, this.createSavedStateHandle()
+            )
         }
         initializer {
             LocalMediaVM(
@@ -45,7 +48,12 @@ object AppVMProvider {
                 xandyCloudApplication().container.uiRepository
             )
         }
-        initializer { AddToLocalPlVM(xandyCloudApplication().container.songRepository) }
+        initializer {
+            AddToLocalPlVM(
+                xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.uiRepository
+            )
+        }
         initializer {
             LocalAlbumVM(
                 xandyCloudApplication().container.songRepository,
@@ -78,13 +86,20 @@ object AppVMProvider {
             EditAudioVM(xandyCloudApplication().container.songRepository)
         }
         initializer { LyricsVM(xandyCloudApplication().container.lyricsRepository) }
-        initializer { LyricsEditorVM(
-            xandyCloudApplication().container.lyricsRepository,
-            xandyCloudApplication().container.songRepository
-        )
+        initializer {
+            LyricsEditorVM(
+                xandyCloudApplication().container.lyricsRepository,
+                xandyCloudApplication().container.songRepository
+            )
+        }
+        initializer {
+            LibraryBasedRouteVM(
+                xandyCloudApplication().container.songRepository,
+                xandyCloudApplication().container.uiRepository
+            )
         }
     }
 }
 
-fun CreationExtras.xandyCloudApplication(): XandyCloudApplication =
+private fun CreationExtras.xandyCloudApplication(): XandyCloudApplication =
     (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as XandyCloudApplication)

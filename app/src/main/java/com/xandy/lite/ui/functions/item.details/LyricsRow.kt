@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -131,20 +132,18 @@ fun LyricsRow(
                     }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         DropdownMenuItem(
-                            text = { Text("Edit") },
+                            text = { Text(stringResource(R.string.Edit)) },
                             trailingIcon = { ci.ContentIcon(Icons.Default.Edit) },
                             onClick = { expanded = false; onEdit() }
                         )
                         DropdownMenuItem(
-                            text = { Text("Export") },
-                            trailingIcon = {
-                                ci.ContentIcon(painterResource(R.drawable.outline_file_export))
-                            },
+                            text = { Text(stringResource(R.string.Export)) },
+                            trailingIcon = { ci.ContentIcon(R.drawable.outline_file_export) },
                             onClick = { expanded = false; onExport() }
                         )
 
                         DropdownMenuItem(
-                            text = { Text("Delete") },
+                            text = { Text(stringResource(R.string.Delete)) },
                             trailingIcon = { ci.ContentIcon(Icons.Default.Delete) },
                             onClick = { expanded = false; onDelete() }
                         )
@@ -153,7 +152,8 @@ fun LyricsRow(
             }
         else {
             Text(
-                text = "Lyrics", textDecoration = TextDecoration.Underline,
+                text = stringResource(R.string.Lyrics),
+                textDecoration = TextDecoration.Underline,
                 style = MaterialTheme.typography.titleLarge,
                 textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp)
             )
@@ -174,9 +174,7 @@ fun LyricsRow(
                     textAlign = TextAlign.Start, modifier = Modifier.padding(top = 4.dp),
                     style = MaterialTheme.typography.titleLarge,
                 )
-                l.audios.forEach {
-                    Text(it.title)
-                }
+                l.audios.forEach { Text(it.title) }
             }
         }
     }

@@ -2,10 +2,7 @@ package com.xandy.lite.ui
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
-import com.xandy.lite.models.Theme
-import com.xandy.lite.models.application.PrefRepository
-import com.xandy.lite.models.media.player.LoadControl
-import com.xandy.lite.models.media.player.PlayerControls
+import my.nanihadesuka.compose.ScrollbarSettings
 
 @Suppress("unused")
 class GetUIStyle(
@@ -39,13 +36,21 @@ class GetUIStyle(
     fun themedOnContainerColor(): Color =
         if (isDarkTheme) Color.Companion.White else Color.Companion.Black
 
-    fun altThemedColor(): Color =
+
+    fun altThemedOnContainerColor(): Color =
         if (isDarkTheme) Color(183, 116, 201, 255)
         else Color(73, 4, 119, 255)
 
+    fun altDarkThemeBackgroundColor() = Color(54, 1, 89, 255)
+    fun altLightThemeBackgroundColor() = Color(225, 146, 250, 255)
+
+    fun configTintColor() =
+        if (isDarkTheme) Color(250, 236, 147, 255)
+        else Color(84, 65, 0, 255)
+
     fun pickedSongColor(): Color =
         if (isDarkTheme) Color(143, 159, 253, 255)
-        else Color(0, 10, 51, 255)
+        else Color(1, 13, 101, 255)
 
     fun disabledThemedColor(): Color =
         if (isDarkTheme) Color(38, 38, 38, 204)
@@ -68,4 +73,10 @@ class GetUIStyle(
     fun floatingButtonColor(): Color =
         if (isDarkTheme) Color(72, 41, 41, 255) else Color(112, 76, 76, 255)
 
+    fun greenBorderColor() = if (isDarkTheme) Color(0, 70, 0, 255) else Color(0, 200, 0, 255)
+
+    fun defaultScrollBarSettings() =
+        ScrollbarSettings(
+            thumbSelectedColor = selectedThumbColor(), thumbUnselectedColor = unSelectedThumbColor()
+        )
 }

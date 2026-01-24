@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
@@ -39,7 +40,7 @@ import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.GetUIStyle
 
 @Composable
-fun VerticalEditAudioView(
+internal fun VerticalEditAudioView(
     audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean, lyrics: Lyrics,
     onLyricsChange: (Lyrics) -> Unit, onUpdate: (AudioFile, Lyrics?) -> Unit,
     allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle
@@ -51,7 +52,7 @@ fun VerticalEditAudioView(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Title", textDecoration = TextDecoration.Underline)
+        Text(text = stringResource(R.string.Title), textDecoration = TextDecoration.Underline)
         TextField(
             value = audio.title, onValueChange = { onAudioChange(audio.copy(title = it)) },
             modifier = Modifier
@@ -59,18 +60,19 @@ fun VerticalEditAudioView(
                 .padding(8.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
         )
-        Text(text = "Artist", textDecoration = TextDecoration.Underline)
+        Text(text = stringResource(R.string.Artist), textDecoration = TextDecoration.Underline)
         TextField(
-            value = audio.artist, onValueChange = { onAudioChange(audio.copy(artist = it)) },
+            value = audio.artist ?: "", onValueChange = { onAudioChange(audio.copy(artist = it)) },
+            placeholder = { Text(stringResource(R.string.no_artist_set_yet)) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
         )
-        Text(text = "Genre", textDecoration = TextDecoration.Underline)
+        Text(text = stringResource(R.string.Genre), textDecoration = TextDecoration.Underline)
         TextField(
             value = audio.genre ?: "",
-            placeholder = { Text("No genre set yet") },
+            placeholder = { Text(stringResource(R.string.no_genre_set_yet)) },
             onValueChange = { onAudioChange(audio.copy(genre = it)) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -79,17 +81,19 @@ fun VerticalEditAudioView(
                 imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences
             )
         )
-        Text(text = "Album", textDecoration = TextDecoration.Underline)
+        Text(text = stringResource(R.string.Album), textDecoration = TextDecoration.Underline)
         TextField(
             value = audio.album ?: "",
-            placeholder = { Text("No album set yet") },
+            placeholder = { Text(stringResource(R.string.no_album_set_yet)) },
             onValueChange = { onAudioChange(audio.copy(album = it)) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
         )
-        Text(text = "Release Date", textDecoration = TextDecoration.Underline)
+        Text(
+            text = stringResource(R.string.release_date), textDecoration = TextDecoration.Underline
+        )
         DateChooser(
             minYear = 1900, getUIStyle = getUIStyle,
             modifier = Modifier
@@ -100,7 +104,9 @@ fun VerticalEditAudioView(
             onDaySelected = { if (audio.month != null) onAudioChange(audio.copy(day = it)) },
             onMonthSelected = { onAudioChange(audio.copy(month = it)) }
         )
-        Text(text = "Picture", textDecoration = TextDecoration.Underline)
+        Text(
+            text = stringResource(R.string.cover_image), textDecoration = TextDecoration.Underline
+        )
         Row(
             modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
@@ -110,7 +116,7 @@ fun VerticalEditAudioView(
                     .data(audio.picture)
                     .crossfade(true)
                     .build(),
-                contentDescription = "Album art",
+                contentDescription = stringResource(R.string.cover_image),
                 placeholder = painterResource(R.drawable.unknown_track),
                 error = painterResource(R.drawable.unknown_track),
                 modifier = Modifier
@@ -125,14 +131,12 @@ fun VerticalEditAudioView(
                 onAudioChange(audio.copy(picture = picture))
             }
         }
-        LyricsOptions( lyrics) { onLyricsChange(it) }
+        LyricsOptions(lyrics) { onLyricsChange(it) }
         Spacer(Modifier.padding(vertical = 10.dp))
         HorizontalDivider(Modifier.fillMaxWidth())
         Button(
             onClick = { onUpdate(audio, lyrics.takeIf { ls -> ls.plain.isNotBlank() }) },
             modifier = Modifier.padding(8.dp)
-        ) {
-            Text("Update Song")
-        }
+        ) { Text(stringResource(R.string.update_track)) }
     }
 }

@@ -13,7 +13,7 @@ import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.json.Json
 import java.util.Date
 
-class UriTypeConverter {
+internal class UriTypeConverter {
     @TypeConverter
     fun toString(uri: Uri) = uri.toString()
 
@@ -21,7 +21,7 @@ class UriTypeConverter {
     fun toUri(string: String) = string.toUri()
 }
 
-class TimestampConverter {
+internal class TimestampConverter {
     @TypeConverter
     fun toDate(long: Long) = Date(long)
 
@@ -39,7 +39,7 @@ class OrderByConverter {
 
 private val json = Json
 
-class LyricsConverter {
+internal class LyricsConverter {
     @TypeConverter
     fun scrollToText(scroll: Set<LyricLine>?): String? =
         if (scroll.isNullOrEmpty()) null
@@ -61,7 +61,7 @@ class FailureCategoryConverter {
         json.decodeFromString<FailureCategory>(text)
 }
 
-class TranslatedLyricsConverter {
+internal class TranslatedLyricsConverter {
     @TypeConverter
     fun toString(value: TranslatedLyrics?): String? =
         value?.let { json.encodeToString(TranslatedLyrics.serializer(), it) }

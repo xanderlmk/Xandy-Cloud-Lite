@@ -4,5 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class LocalMusicTabs {
-    LIBRARY, PLAYLIST, ALBUMS, ARTISTS, GENRES, FOLDERS, HIDDEN
+    FAVORITES, LIBRARY, PLAYLIST, ALBUMS, ARTISTS, GENRES, FOLDERS, HIDDEN;
+
+    fun isSelectable() = this == FAVORITES || this == LIBRARY || this == HIDDEN || this == FOLDERS
 }

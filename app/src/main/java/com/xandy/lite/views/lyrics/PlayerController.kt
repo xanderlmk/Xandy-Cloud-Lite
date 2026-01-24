@@ -38,7 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,8 +48,8 @@ import androidx.media3.session.MediaController
 import com.xandy.lite.R
 import com.xandy.lite.controllers.view.models.LyricsEditorVM
 import com.xandy.lite.db.tables.AudioFile
+import com.xandy.lite.db.tables.itemKey
 import com.xandy.lite.db.tables.toMediaItem
-import com.xandy.lite.models.itemKey
 import com.xandy.lite.models.ui.Transitions
 import com.xandy.lite.ui.GetUIStyle
 import com.xandy.lite.ui.functions.ContentIcons
@@ -57,23 +57,25 @@ import kotlinx.coroutines.delay
 
 
 @Composable
-fun PlayerController(
+internal fun PlayerController(
     controller: MediaController, vm: LyricsEditorVM, audio: AudioFile,
     toggled: Boolean, onToggle: (Boolean) -> Unit, getUIStyle: GetUIStyle, modifier: Modifier
 ) {
     val isPlaying by vm.isPlaying.collectAsStateWithLifecycle()
     val isLoading by vm.isLoading.collectAsStateWithLifecycle()
     val sd by vm.songDetails.collectAsStateWithLifecycle()
-    val queue by vm.queue.collectAsStateWithLifecycle()
+    val appStrings by vm.appStrings.collectAsStateWithLifecycle()
     val ci = ContentIcons(getUIStyle)
     val onClick: () -> Unit = {
         val af = audio
-        val index = queue.indexOfFirst {
-            it.mediaItem.itemKey() == af.id
-        }.takeIf { it >= 0 } ?: queue.size
-
-        if (index == queue.size)
-            controller.addMediaItem(af.toMediaItem())
+        val allItems = (0 until controller.mediaItemCount).map { index ->
+            controller.getMediaItemAt(index)
+        }
+        val index = allItems.indexOfFirst {
+            it.itemKey() == af.id
+        }.takeIf { it >= 0 } ?: allItems.size
+        if (index == allItems.size)
+            controller.addMediaItem(af.toMediaItem(appStrings))
 
         controller.seekToDefaultPosition(index)
         if (!isPlaying)
@@ -81,137 +83,135 @@ fun PlayerController(
     }
 
 
-    if (sd != null) {
-        val transitionState = remember {
-            MutableTransitionState(false).apply { targetState = true }
-        }
-        AnimatedVisibility(
-            visibleState = transitionState,
-            enter = Transitions.composableEnter,
-            exit = Transitions.composableExit,
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp)
-                .background(getUIStyle.floatingPlayerBackground(), RoundedCornerShape(24.dp))
-                .padding(0.5.dp)
-                .zIndex(4f)
-        ) {
-            if (toggled) {
-                Column(
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
+    val transitionState = remember {
+        MutableTransitionState(false).apply { targetState = true }
+    }
+    AnimatedVisibility(
+        visibleState = transitionState,
+        enter = Transitions.composableEnter,
+        exit = Transitions.composableExit,
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 4.dp)
+            .background(getUIStyle.floatingPlayerBackground(), RoundedCornerShape(24.dp))
+            .padding(0.5.dp)
+            .zIndex(4f)
+    ) {
+        if (toggled) {
+            Column(
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                PlaybackProgress(
+                    controller, vm, Modifier
+                        .fillMaxHeight(.3f)
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp)
+                        .offset(y = (-5).dp, x = 0.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight(.7f)
+                        .fillMaxWidth()
                 ) {
-                    PlaybackProgress(
-                        controller, vm, Modifier
-                            .fillMaxHeight(.3f)
-                            .fillMaxWidth()
-                            .padding(bottom = 4.dp)
-                            .offset(y = (-5).dp, x= 0.dp)
-                    )
-                    Box(
+                    Row(
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .fillMaxHeight(.7f)
-                            .fillMaxWidth()
+                            .align(Alignment.CenterStart)
+                            .fillMaxHeight()
+                            .fillMaxWidth(.55f)
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .fillMaxHeight()
-                                .fillMaxWidth(.55f)
-                        ) {
-                            sd?.let { details ->
-                                IconButton(onClick = onClick) {
+
+                        IconButton(onClick = onClick) {
+                            ci.ContentIcon(
+                                Icons.Default.Refresh, contentDescription = "Refresh"
+                            )
+                        }
+                        Column {
+                            val title =
+                                if (sd?.id != audio.id && sd != null)
+                                    stringResource(R.string.click_to_seek_to_track)
+                                else audio.title
+                            val artist =
+                                if (sd?.id != audio.id && sd != null) sd?.title else audio.artist
+                            Text(
+                                title, maxLines = 1, fontSize = 16.sp,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier
+                                    .basicMarquee()
+                                    .padding(start = 4.dp),
+                            )
+                            Text(
+                                artist ?: appStrings.unknownArtist,
+                                maxLines = 1, fontSize = 14.sp,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(start = 4.dp),
+                            )
+                        }
+
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .fillMaxWidth(.45f)
+                    ) {
+                        IconButton(onClick = { controller.seekBack() }) {
+                            ci.ContentIcon(
+                                R.drawable.fast_rewind, contentDescription = "Rewind"
+                            )
+                        }
+                        if (isLoading) {
+                            CircularProgressIndicator(Modifier.size(20.dp))
+                        } else {
+                            if (isPlaying) {
+                                IconButton(onClick = { controller.pause() }) {
                                     ci.ContentIcon(
-                                        Icons.Default.Refresh, contentDescription = "Refresh"
+                                        R.drawable.baseline_pause, contentDescription = "Pause"
                                     )
                                 }
-                                Column {
-                                    val title =
-                                        if (details.id != audio.id) "Click reset button to enqueue picked song." else audio.title
-                                    val artist =
-                                        if (details.id != audio.id) details.title else audio.artist
-                                    Text(
-                                        title, maxLines = 1, fontSize = 16.sp,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        modifier = Modifier
-                                            .basicMarquee()
-                                            .padding(start = 4.dp),
-                                    )
-                                    Text(
-                                        artist, maxLines = 1, fontSize = 14.sp,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.padding(start = 4.dp),
+                            } else {
+                                IconButton(onClick = {
+                                    if (sd?.id != audio.id) onClick()
+                                    else controller.play()
+                                }) {
+                                    ci.ContentIcon(
+                                        Icons.Default.PlayArrow, contentDescription = "Play"
                                     )
                                 }
                             }
                         }
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .fillMaxHeight()
-                                .fillMaxWidth(.45f)
-                        ) {
-                            IconButton(onClick = { controller.seekBack() }) {
-                                ci.ContentIcon(
-                                    painterResource(R.drawable.fast_rewind),
-                                    contentDescription = "Rewind"
-                                )
-                            }
-                            if (isLoading) {
-                                CircularProgressIndicator(Modifier.size(20.dp))
-                            } else {
-                                if (isPlaying) {
-                                    IconButton(onClick = { controller.pause() }) {
-                                        ci.ContentIcon(
-                                            painterResource(R.drawable.baseline_pause),
-                                            contentDescription = "Pause"
-                                        )
-                                    }
-                                } else {
-                                    IconButton(onClick = {
-                                        if (sd?.id != audio.id) onClick()
-                                        else controller.play()
-                                    }) {
-                                        ci.ContentIcon(
-                                            Icons.Default.PlayArrow, contentDescription = "Play"
-                                        )
-                                    }
-                                }
-                            }
-                            IconButton(onClick = { controller.seekForward() }) {
-                                ci.ContentIcon(
-                                    painterResource(R.drawable.fast_forward),
-                                    contentDescription = "Forward"
-                                )
-                            }
-                            IconButton(onClick = {
-                                transitionState.targetState = false; onToggle(false)
-                            }) {
-                                ci.ContentIcon(
-                                    Icons.Default.KeyboardArrowDown, contentDescription = "Dismiss"
-                                )
-                            }
+                        IconButton(onClick = { controller.seekForward() }) {
+                            ci.ContentIcon(
+                                R.drawable.fast_forward, contentDescription = "Forward"
+                            )
+                        }
+                        IconButton(onClick = {
+                            transitionState.targetState = false; onToggle(false)
+                        }) {
+                            ci.ContentIcon(
+                                Icons.Default.KeyboardArrowDown, contentDescription = "Dismiss"
+                            )
                         }
                     }
                 }
-            } else {
-                LaunchedEffect(Unit) {
-                    delay(40); transitionState.targetState = true
-                }
-                Row(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
-                        .clickable { onToggle(true) },
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    ci.ContentIcon(Icons.Default.KeyboardArrowUp)
-                    ci.ContentIcon(Icons.Default.KeyboardArrowUp)
-                }
+            }
+        } else {
+            LaunchedEffect(Unit) {
+                delay(40); transitionState.targetState = true
+            }
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .clickable { onToggle(true) },
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                ci.ContentIcon(Icons.Default.KeyboardArrowUp)
+                ci.ContentIcon(Icons.Default.KeyboardArrowUp)
             }
         }
     }

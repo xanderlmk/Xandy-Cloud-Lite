@@ -7,6 +7,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.xandy.lite.models.application.AppStrings
 import com.xandy.lite.models.ui.PlaylistWithCount
 import com.xandy.lite.models.ui.order.by.OBS
 import com.xandy.lite.models.ui.order.by.OrderSongsBy
@@ -51,7 +52,7 @@ data class PlaylistSongOrder(
     val orderedBy: OrderSongsBy = OrderSongsBy.CreatedOnASC
 ) : Parcelable
 
-private fun songComparator(order: OrderSongsBy): Comparator<SongWithDateAdded> =
+private fun songComparator(order: OrderSongsBy, unknown: String): Comparator<SongWithDateAdded> =
     Comparator { a, b ->
         when (order) {
             is OrderSongsBy.TitleASC -> a.data.title.compareTo(b.data.title, ignoreCase = true)
@@ -68,14 +69,17 @@ private fun songComparator(order: OrderSongsBy): Comparator<SongWithDateAdded> =
                 db.compareTo(da)
             }
 
-            is OrderSongsBy.ArtistASC -> a.data.artist.compareTo(b.data.artist, ignoreCase = true)
-            is OrderSongsBy.ArtistDESC -> b.data.artist.compareTo(a.data.artist, ignoreCase = true)
+            is OrderSongsBy.ArtistASC ->
+                (a.data.artist ?: unknown).compareTo(b.data.artist?: unknown, ignoreCase = true)
+
+            is OrderSongsBy.ArtistDESC ->
+                (b.data.artist ?: unknown).compareTo(a.data.artist?: unknown, ignoreCase = true)
         }
     }
 
-fun List<LocalPlsWithAudio>.toPlaylistWithCount() = this.map {
+fun List<LocalPlsWithAudio>.toPlaylistWithCount(appStrings: AppStrings) = this.map {
     val order = it.order.orderedBy
-    val sortedSongs = it.songs.sortedWith(songComparator(order))
+    val sortedSongs = it.songs.sortedWith(songComparator(order, appStrings.unknownArtist))
     PlaylistWithCount(
         playlist = it.playlist,
         songs = sortedSongs,

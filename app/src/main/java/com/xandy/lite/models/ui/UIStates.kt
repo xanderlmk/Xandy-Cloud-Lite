@@ -17,7 +17,8 @@ import com.xandy.lite.models.ui.order.by.OrderSongsBy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.parcelize.Parcelize
-import java.util.Date
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 
 @Parcelize
@@ -31,20 +32,42 @@ data class SongDetails(
     val album: String?, val picture: Any?, val lyrics: Lyrics?
 )
 
-data class PickedSongVMStates(
-    val song: SongDetails?, val isPlaying: Boolean,
-    val isLoading: Boolean, val repeatMode: Int, val shuffleMode: Boolean,
-    val sortedQueue: List<MediaItemWithCreatedOn>, val unsortedQueue: List<MediaItemWithCreatedOn>,
-    val queueSize: Int, val queueAsc: Boolean, val queueOrder: OrderQueueBy
-
-)
 
 @Parcelize
 data class LocalAudioStates(
-    val isLoading: Boolean, val alDirection: Boolean, val isSelecting: Boolean,
-    val plsDirection: Boolean, val tab: LocalMusicTabs, val isSearching: Boolean,
-    val gettingPics: Boolean, val autoUpdate: Boolean
+    val isLoading: Boolean, val isSelecting: Boolean, val alDirection: Boolean,
+    val hiddenDirection: Boolean, val plsDirection: Boolean, val albumDirection: Boolean,
+    val artistDirection: Boolean, val genreDirection: Boolean, val favDirections: Boolean,
+    val tab: LocalMusicTabs, val isSearching: Boolean, val gettingPics: Boolean,
+    val autoUpdate: Boolean
 ) : Parcelable
+
+@Parcelize
+data class IsDefaultMediaOrder(
+    val album: Boolean, val artist: Boolean, val genre: Boolean
+) : Parcelable
+
+@Parcelize
+data class MediaDirections(
+    val alDirection: Boolean, val hiddenDirection: Boolean, val plsDirection: Boolean,
+    val albumDirection: Boolean, val artistDirection: Boolean, val genreDirection: Boolean,
+    val favDirection: Boolean
+) : Parcelable
+
+private const val MEDIA_STATE = "MediaState"
+
+@Serializable
+@SerialName(MEDIA_STATE)
+data class MediaState(
+    /** The key of the given media item, can be album, artist, or genre) */
+    @SerialName("$MEDIA_STATE.Key")
+    val key: String,
+    /** The id of the first song in the list */
+    @SerialName("$MEDIA_STATE.First")
+    val first: String
+)
+
+fun MediaState.isBlank() = key.isBlank() && first.isBlank()
 
 /**
  * @param audioUIState Shown Audio list
@@ -60,7 +83,8 @@ data class LocalMediaStates(
     val folders: List<BucketWithAudio> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
-    val genres: List<Genre> = emptyList()
+    val genres: List<Genre> = emptyList(),
+    val favorites: List<AudioFile> = emptyList()
 ) : Parcelable
 
 
@@ -102,7 +126,8 @@ data class Album(
 
 @Parcelize
 data class Artist(
-    val name: String, val picture: Uri, val songs: List<AudioFile>, val songCount: Int
+    val name: String, val picture: Uri, val songs: List<AudioFile>, val songCount: Int,
+    val albums: List<String>, val albumCount: Int
 ) : Parcelable
 
 @Parcelize
@@ -112,7 +137,6 @@ data class Genre(
 
 fun Flow<LocalPlUIState>.toPlaylists() = this.map { it.list.map { pl -> pl.playlist } }
 
-data class MediaItemWithCreatedOn(val mediaItem: MediaItem, val createdOn: Date)
 
 @Parcelize
 sealed class ShowModalFor : Parcelable {
@@ -129,10 +153,14 @@ sealed class SongToggle : Parcelable {
     data object Details : SongToggle()
 
     @Parcelize
-    data object Queue : SongToggle()
+    data class Queue(val priority: Boolean = false) : SongToggle()
 
+    /**
+     * @param sync Whether to show plain lyrics or synchronized lyrics,
+     * if false show plain lyrics
+     */
     @Parcelize
-    data object Lyrics : SongToggle()
+    data class Lyrics(val sync: Boolean = true) : SongToggle()
 }
 
 fun Context.drawableResUri(@DrawableRes resId: Int): Uri =

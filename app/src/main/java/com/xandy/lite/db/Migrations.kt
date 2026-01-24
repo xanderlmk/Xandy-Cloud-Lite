@@ -1,7 +1,6 @@
-package com.xandy.lite.models
+package com.xandy.lite.db
 
 import android.content.ContentUris
-import android.content.Context
 import android.util.Log
 import androidx.core.database.getIntOrNull
 import androidx.core.database.getLongOrNull
@@ -11,8 +10,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.xandy.lite.models.ui.order.by.OBS
 import java.util.UUID
+import kotlin.collections.iterator
 
-val MIGRATION_1_2 = object : Migration(1, 2) {
+internal val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
         try {
             db.execSQL("PRAGMA foreign_keys=OFF;")
@@ -58,7 +58,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-val MIGRATION_2_3 = object : Migration(2, 3) {
+internal val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         try {
             db.beginTransaction()
@@ -82,7 +82,7 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
-val MIGRATION_5_6 = object : Migration(5, 6) {
+internal val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) {
         try {
 
@@ -163,7 +163,7 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
-val MIGRATION_7_8 = object : Migration(7, 8) {
+internal val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(db: SupportSQLiteDatabase) {
         try {
 
@@ -300,7 +300,7 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
-val MIGRATION_8_9 = object : Migration(8, 9) {
+internal val MIGRATION_8_9 = object : Migration(8, 9) {
     override fun migrate(db: SupportSQLiteDatabase) {
         try {
             db.beginTransaction()
@@ -329,7 +329,7 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
 }
 
 //class Migrations(context: Context) {
-val MIGRATION_9_10 = object : Migration(9, 10) {
+internal val MIGRATION_9_10 = object : Migration(9, 10) {
     override fun migrate(db: SupportSQLiteDatabase) {
         try {
 
@@ -466,7 +466,7 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
     }
     //  }
 }
-val MIGRATION_10_11 = object : Migration(10, 11) {
+internal val MIGRATION_10_11 = object : Migration(10, 11) {
     override fun migrate(db: SupportSQLiteDatabase) {
         try {
 
@@ -553,6 +553,93 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
+
+internal val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        try {
+
+            db.beginTransaction()
+            db.execSQL("PRAGMA foreign_keys=OFF;")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS local_audio_temp(
+                    song_id TEXT NOT NULL,
+                    file_id INTEGER NOT NULL,
+                    uri TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    artist TEXT DEFAULT NULL,
+                    album TEXT, 
+                    genre TEXT,
+                    duration_millis INTEGER NOT NULL,
+                    year INTEGER DEFAULT NULL, 
+                    day INTEGER DEFAULT NULL, 
+                    month INTEGER DEFAULT NULL,
+                    picture TEXT NOT NULL,
+                    created_on INTEGER NOT NULL,
+                    date_modified INTEGER NOT NULL,
+                    hidden INTEGER NOT NULL DEFAULT false,
+                    permanently_hidden INTEGER NOT NULL DEFAULT false,
+                    favorite INTEGER NOT NULL DEFAULT false,
+                    lyrics_id TEXT DEFAULT NULL,
+                    bucket_id INTEGER,
+                    volume_name TEXT,
+                    FOREIGN KEY(volume_name, bucket_id) REFERENCES bucket(volume_name, id)
+                    ON DELETE SET NULL ON UPDATE CASCADE 
+                    FOREIGN KEY(lyrics_id) REFERENCES lyrics(id)
+                    ON DELETE SET NULL ON UPDATE CASCADE
+                    PRIMARY KEY(song_id)
+                )
+            """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT INTO local_audio_temp(
+                    song_id, file_id, uri, display_name, title, artist, album, genre, 
+                    duration_millis, year, day, month, picture, created_on, date_modified, hidden, 
+                    favorite, permanently_hidden, lyrics_id, volume_name, bucket_id
+                )
+                SELECT song_id, file_id, uri, display_name, title, artist, album, 
+                    genre, duration_millis, year, day, month, picture, 
+                    created_on, date_modified, hidden, favorite, permanently_hidden,
+                    lyrics_id, volume_name, bucket_id
+                FROM local_audio""".trimIndent()
+            )
+            db.execSQL("""DROP TABLE IF EXISTS local_audio""")
+
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX uri_index on local_audio_temp(uri)
+            """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE INDEX file_id_index on local_audio_temp(file_id)
+            """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE INDEX bucket_reference_index ON local_audio_temp(volume_name, bucket_id)
+            """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE INDEX lyrics_reference_index ON local_audio_temp(lyrics_id)
+            """.trimIndent()
+            )
+
+            db.execSQL("""ALTER TABLE local_audio_temp RENAME TO local_audio""")
+
+            db.execSQL("PRAGMA foreign_keys=ON;")
+            db.setTransactionSuccessful()
+        } catch (e: Exception) {
+            migrationError(e, 12, 13)
+        } finally {
+            db.endTransaction()
+        }
+
+    }
+}
 private fun migrationError(e: Exception, first: Int, second: Int) {
     Log.e("Migration", "Migration $first to $second failed", e)
     throw RuntimeException("Migration $first to $second failed: ${e.message}")

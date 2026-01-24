@@ -17,14 +17,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xandy.lite.R
 import com.xandy.lite.models.ui.Genre
 import com.xandy.lite.ui.GetUIStyle
 
 @Composable
 fun GenreRow(genre: Genre, getUIStyle: GetUIStyle, onClick: () -> Unit) {
+    val trackCount = if (genre.songCount == 1) stringResource(R.string.one_track)
+    else stringResource(R.string.num_tracks,genre.songCount)
+
     Row(
         Modifier
             .fillMaxWidth()
@@ -37,7 +42,7 @@ fun GenreRow(genre: Genre, getUIStyle: GetUIStyle, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start
     ) {
-        Artwork(genre.picture,LocalContext.current, Modifier.size(50.dp))
+        Artwork(genre.picture, LocalContext.current, Modifier.size(50.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.Start,
@@ -51,7 +56,7 @@ fun GenreRow(genre: Genre, getUIStyle: GetUIStyle, onClick: () -> Unit) {
                     .fillMaxWidth(.90f), fontSize = 17.sp
             )
             Text(
-                "${genre.songCount} Tracks",
+                trackCount,
                 maxLines = 1, style = MaterialTheme.typography.bodySmall,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier

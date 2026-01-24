@@ -20,12 +20,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.xandy.lite.R
 import com.xandy.lite.ui.functions.item.details.PlaylistOrderRow
 import com.xandy.lite.controllers.view.models.LocalPLVM
+import com.xandy.lite.models.AudioDialog
 import com.xandy.lite.models.XCToast
+import com.xandy.lite.models.ui.InsertResult
 import com.xandy.lite.models.ui.PlaylistWithCount
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.LyricsListDialog
@@ -33,6 +37,7 @@ import com.xandy.lite.ui.functions.SongLazyColumn
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.functions.item.details.SongRow
 import com.xandy.lite.ui.GetUIStyle
+import com.xandy.lite.ui.functions.AudioDetailsDialog
 import kotlinx.coroutines.launch
 import my.nanihadesuka.compose.LazyColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
@@ -40,28 +45,29 @@ import my.nanihadesuka.compose.ScrollbarSettings
 
 @Composable
 fun LocalPlaylistView(
-    playlistVM: LocalPLVM, currentId: String, getUIStyle: GetUIStyle, songsInPL: PlaylistWithCount,
+    vm: LocalPLVM, currentId: String, getUIStyle: GetUIStyle, songsInPL: PlaylistWithCount,
     onAdd: (String) -> Unit, onEditSong: (String) -> Unit
 ) {
-    val sd by playlistVM.songDetails.collectAsStateWithLifecycle()
-    val isSelecting by playlistVM.isSelecting.collectAsStateWithLifecycle()
-    val selectedSongIds by playlistVM.selectedSongIds.collectAsStateWithLifecycle()
-    val isAdding by playlistVM.isAdding.collectAsStateWithLifecycle()
-    val query by playlistVM.query.collectAsStateWithLifecycle()
-    val isSearching by playlistVM.isSearching.collectAsStateWithLifecycle()
-    val alIsLoading by playlistVM.localAudiosLoading.collectAsStateWithLifecycle()
+    val sd by vm.songDetails.collectAsStateWithLifecycle()
+    val isSelecting by vm.isSelecting.collectAsStateWithLifecycle()
+    val selectedSongIds by vm.selectedSongIds.collectAsStateWithLifecycle()
+    val isAdding by vm.isAdding.collectAsStateWithLifecycle()
+    val query by vm.query.collectAsStateWithLifecycle()
+    val isSearching by vm.isSearching.collectAsStateWithLifecycle()
+    val alIsLoading by vm.localAudiosLoading.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
-    val isPlaying by playlistVM.isPlaying.collectAsStateWithLifecycle()
-    val controller by playlistVM.mediaController.collectAsStateWithLifecycle()
-    val tracks by playlistVM.tracks.collectAsStateWithLifecycle()
+    val isPlaying by vm.isPlaying.collectAsStateWithLifecycle()
+    val controller by vm.mediaController.collectAsStateWithLifecycle()
     val ci = ContentIcons(getUIStyle)
-    val pickedQueueName by playlistVM.pickedQueueName.collectAsStateWithLifecycle()
+    val pickedQueueName by vm.pickedQueueName.collectAsStateWithLifecycle()
+    var afDetails by rememberSaveable { mutableStateOf(AudioDialog()) }
+
     val name = "local_playlist_${songsInPL.playlist.name}"
     val onPlay: () -> Unit = {
         songsInPL.songs.takeIf { it.isNotEmpty() }
             ?.let { songs ->
                 val index = songs.indices.random()
-                playlistVM.selectSong(songs[index].data, songs.map { it.data }, name)
+                vm.selectSong(songs[index].data, songs.map { it.data }, name)
             }
     }
     val modifier =
@@ -74,10 +80,13 @@ fun LocalPlaylistView(
         .padding(2.dp)
     val state = rememberLazyListState()
     var showDialog by rememberSaveable { mutableStateOf(Pair(false, "")) }
-    val lyricsList by playlistVM.lyricsList.collectAsStateWithLifecycle()
+    val lyricsList by vm.lyricsList.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var enabled by rememberSaveable { mutableStateOf(true) }
+    val appStrings by vm.appStrings.collectAsStateWithLifecycle()
     val toast = XCToast(context)
+    val trackText = if (songsInPL.songCount == 1) stringResource(R.string.one_track) else
+        stringResource(R.string.num_tracks, songsInPL.songCount)
     LazyColumnScrollbar(
         state = state,
         settings = ScrollbarSettings(
@@ -88,7 +97,6 @@ fun LocalPlaylistView(
             .padding(top = 4.dp)
     ) {
         val selectedSongSet = selectedSongIds.toSet()
-
         if (!isAdding) {
             LazyColumn(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -100,7 +108,7 @@ fun LocalPlaylistView(
                     if (picture != null) Artwork(picture, LocalContext.current, pictureModifier)
                     else Artwork(pictureModifier)
                     Text(
-                        text = "${songsInPL.songCount} tracks",
+                        text = trackText,
                         style = MaterialTheme.typography.titleMedium, fontSize = 16.sp
                     )
                 }
@@ -108,24 +116,20 @@ fun LocalPlaylistView(
                     PlaylistOrderRow(
                         songsInPL.order, ci, onUpdate = { order ->
                             coroutineScope.launch {
-                                playlistVM.updateOrder(
+                                vm.updateOrder(
                                     order, songsInPL.playlist
                                 )
                             }
                         }, onShuffle = {
                             songsInPL.songs.takeIf { it.isNotEmpty() }?.let { songs ->
                                 val index = songs.indices.random()
-                                playlistVM.setShuffleOn(
+                                vm.setShuffleOn(
                                     songs[index].data, songs.map { it.data }, name
                                 )
                             }
                         }, onPlay = {
-                            if (tracks.isEmpty) onPlay()
-                            else {
-                                if (pickedQueueName != name) onPlay()
-                                else
-                                    if (isPlaying) controller?.pause() else controller?.play()
-                            }
+                            if (pickedQueueName != name) onPlay()
+                            else if (isPlaying) controller?.pause() else controller?.play()
                         }, isPlaying = (isPlaying && pickedQueueName == name),
                         enabled = !isSearching
                     )
@@ -134,32 +138,33 @@ fun LocalPlaylistView(
                 val filtered = songsInPL.songs.filter { audio ->
                     if (query.isBlank() || !isSearching) return@filter true
                     audio.data.title.contains(query, ignoreCase = true) ||
-                            audio.data.artist.contains(query, ignoreCase = true)
+                            audio.data.artist?.contains(query, ignoreCase = true) ?: false
                 }
 
                 items(filtered, key = { it.data.uri.toString() }) { song ->
                     val id = song.data.id
                     val selected = song.data.id in selectedSongSet
                     SongRow(
-                        song.data, getUIStyle, isSelecting = isSelecting, isSelected = selected,
+                        song.data, vm.appStrings.collectAsStateWithLifecycle().value, getUIStyle,
+                        isSelecting = isSelecting, isSelected = selected,
                         onClick = {
-                            if (!isSelecting) playlistVM.selectSong(
+                            if (!isSelecting) vm.selectSong(
                                 song.data, songsInPL.songs.map { it.data }, name
                             )
                             else {
-                                val limitReached = playlistVM.toggleSong(song.data.id)
-                                if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
+                                val limitReached = vm.toggleSong(song.data.id)
+                                if (limitReached) toast.makeMessage(toast.unableToGet2kPlusFiles)
                             }
                         }, enabled = !alIsLoading,
                         onLongPress = {
                             if (isSelecting) {
-                                val limitReached = playlistVM.toggleSong(song.data.id)
-                                if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
-                            } else playlistVM.startSelecting(song.data.id)
+                                val limitReached = vm.toggleSong(song.data.id)
+                                if (limitReached) toast.makeMessage(toast.unableToGet2kPlusFiles)
+                            } else vm.startSelecting(song.data.id)
                         },
                         onDelete = {
                             coroutineScope.launch {
-                                playlistVM.removeLocalSongsFromPL(
+                                vm.removeLocalSongsFromPL(
                                     songIds = listOf(song.data.id),
                                     playlistId = songsInPL.playlist.name
                                 )
@@ -167,44 +172,69 @@ fun LocalPlaylistView(
                         }, context = LocalContext.current, isPickedSong = currentId == id,
                         onEdit = { onEditSong(song.data.uri.toString()) },
                         onAdd = { onAdd(song.data.id) },
+                        onAddFavorite = {
+                            coroutineScope.launch {
+                                val result = vm.onFavoriteSong(song.data.uri)
+                                when (result) {
+                                    InsertResult.Exists ->
+                                        toast.makeMessage(toast.trackAlreadyInFavorites)
+
+                                    InsertResult.Failure ->
+                                        toast.makeMessage(toast.failedToAddToFavorites)
+
+                                    InsertResult.Success -> {}
+                                }
+                            }
+                        },
                         onEnqueue = {
-                            val result = playlistVM.addToQueue(listOf(song.data))
-                            if (result) toast.makeMessage("Song already in queue")
+                            val result = vm.addToQueue(listOf(song.data))
+                            if (result) toast.makeMessage(toast.trackAlreadyInQueue)
+                            else toast.makeMessage(toast.trackAddedToQueue)
+                        },
+                        onShowDetails = { afDetails = AudioDialog(song.data, true) },
+                        onAddNext = {
+                            val result = vm.playNext(song.data)
+                            when (result) {
+                                InsertResult.Exists ->
+                                    toast.makeMessage(toast.trackAlreadyInPlayNext)
+
+                                InsertResult.Failure ->
+                                    toast.makeMessage(toast.failedToAddTrackNullMC)
+
+                                InsertResult.Success ->
+                                    toast.makeMessage(toast.trackAddedToPlayNext)
+                            }
                         },
                         onUpsertLyrics = { showDialog = Pair(true, song.data.uri.toString()) }
                     )
                 }
             }
         } else {
-            val filtered by playlistVM.filteredAudioFiles.collectAsStateWithLifecycle()
+            val filtered by vm.filteredAudioFiles.collectAsStateWithLifecycle()
             val selectedSongSet = selectedSongIds.toSet()
-            SongLazyColumn(
-                list = filtered, getUIStyle = getUIStyle, hideAllowed = Pair(true, "Hide"),
-                isSelecting = isSelecting, enabled = !alIsLoading, state = state,
-                selectedSongSet = selectedSongSet, modifier = Modifier.fillMaxWidth(),
-                onClick = { audio ->
-                    if (!isSelecting) playlistVM.selectSong(
-                        audio, songsInPL.songs.map { it.data }, name
-                    ) else {
-                        val limitReached = playlistVM.toggleSong(audio.id)
-                        if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
+            LazyColumn(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(), state = state,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                items(filtered, key = { it.song.id }) { af ->
+                    val id = af.song.id
+                    val selected = af.song.id in selectedSongSet
+                    SongRow(
+                        af.song, getUIStyle = getUIStyle, isSelected = selected, context = context,
+                        isPickedSong = currentId == id, appStrings = appStrings
+                    ) {
+                        val limitReached = vm.toggleSong(af.song.id)
+                        if (limitReached) toast.makeMessage(toast.unableToGet2kPlusFiles)
                     }
-                },
-                onEnqueue = {
-                    val result = playlistVM.addToQueue(listOf(it))
-                    if (result) toast.makeMessage("Song already in queue")
-                },
-                onDelete = {}, onEdit = {}, onAdd = onAdd, currentId = currentId,
-                onLongPress = {
-                    if (isSelecting) {
-                        val limitReached = playlistVM.toggleSong(it)
-                        if (limitReached) toast.makeMessage("Cannot select more than 2000 files.")
-                    } else playlistVM.startSelecting(it)
-                }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                onUpsertLyrics = { showDialog = Pair(true, it) }
-            )
+                }
+            }
         }
     }
+    AudioDetailsDialog(
+        audio = afDetails.af, showDialog = afDetails.show, getUIStyle = getUIStyle,
+        onDismiss = { afDetails = AudioDialog() }
+    )
     LyricsListDialog(
         showDialog = showDialog.first, onDismiss = { showDialog = Pair(false, "") },
         getUIStyle = getUIStyle, list = lyricsList, enabled = enabled,
@@ -212,17 +242,15 @@ fun LocalPlaylistView(
             coroutineScope.launch {
                 val songUri = showDialog.second
                 if (songUri.isBlank()) {
-                    Toast.makeText(context, "Null song", Toast.LENGTH_SHORT).show()
+                    toast.makeMessage(toast.nullTrack)
                     showDialog = Pair(false, "")
                     return@launch
                 }
                 enabled = false
                 val result =
-                    playlistVM.updateSongLyrics(lyricsId = lyricsId, songUri = songUri)
+                    vm.updateSongLyrics(lyricsId = lyricsId, songUri = songUri)
                 if (!result)
-                    Toast.makeText(
-                        context, "Failed to add lyrics to $songUri", Toast.LENGTH_SHORT
-                    ).show()
+                    toast.makeMessage(toast.failedToAddLyricsTo(songUri))
                 enabled = true
                 showDialog = Pair(false, "")
             }

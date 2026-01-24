@@ -26,4 +26,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Xandy-Cloud-Lite"
 include(":app")
- 
+include(":core")

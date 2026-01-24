@@ -16,39 +16,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.xandy.lite.controllers.view.models.PickedSongVM
-import com.xandy.lite.models.ui.PickedSongVMStates
+import com.xandy.lite.R
 
-
-@Composable
-fun collectPickedSongVMStatesWithLifecycle(songVM: PickedSongVM) = PickedSongVMStates(
-    song = songVM.song.collectAsStateWithLifecycle().value,
-    isPlaying = songVM.isPlaying.collectAsStateWithLifecycle().value,
-    isLoading = songVM.isLoading.collectAsStateWithLifecycle().value,
-    repeatMode = songVM.repeatMode.collectAsStateWithLifecycle().value,
-    shuffleMode = songVM.shuffleMode.collectAsStateWithLifecycle().value,
-    sortedQueue = songVM.sortedQueue.collectAsStateWithLifecycle().value,
-    unsortedQueue = songVM.unsortedQueue.collectAsStateWithLifecycle().value,
-    queueSize = songVM.queueSize.collectAsStateWithLifecycle().value,
-    queueAsc = songVM.queueAsc.collectAsStateWithLifecycle().value,
-    queueOrder = songVM.queueOrder.collectAsStateWithLifecycle().value
-)
 
 @Composable
 fun SearchTextField(
     query: String, querySet: Set<String>, onUpdateQuerySet: (String) -> Unit,
     onValueChange: (String) -> Unit, onTurnOff: () -> Unit, ci: ContentIcons
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(true) }
     val keyboard = LocalSoftwareKeyboardController.current
 
     OutlinedTextField(
         value = query,
         onValueChange = onValueChange,
-        placeholder = { Text("Search...") },
+        placeholder = { Text(stringResource(R.string.Search)) },
         singleLine = true,
         modifier = Modifier
             .fillMaxWidth()
@@ -66,7 +51,7 @@ fun SearchTextField(
         },
         keyboardActions = KeyboardActions(
             onDone = { onUpdateQuerySet(query); keyboard?.hide() },
-            onSend = { onUpdateQuerySet(query); keyboard?.hide() }
+            onSend = { onUpdateQuerySet(query); keyboard?.hide() },
         )
     )
 }

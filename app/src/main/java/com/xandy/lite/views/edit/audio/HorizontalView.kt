@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
@@ -42,7 +43,7 @@ import my.nanihadesuka.compose.ScrollbarSettings
 
 
 @Composable
-fun HorizontalEditAudioView(
+internal fun HorizontalEditAudioView(
     audio: AudioFile, onAudioChange: (AudioFile) -> Unit, enabled: Boolean, lyrics: Lyrics,
     onLyricsChange: (Lyrics) -> Unit, onUpdate: (AudioFile, Lyrics?) -> Unit,
     allMediaArtwork: List<Uri>, getUIStyle: GetUIStyle
@@ -67,7 +68,9 @@ fun HorizontalEditAudioView(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(text = "Title", textDecoration = TextDecoration.Underline)
+                Text(
+                    text = stringResource(R.string.Title), textDecoration = TextDecoration.Underline
+                )
                 TextField(
                     value = audio.title, onValueChange = { onAudioChange(audio.copy(title = it)) },
                     modifier = Modifier
@@ -76,19 +79,25 @@ fun HorizontalEditAudioView(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                 )
 
-                Text(text = "Artist", textDecoration = TextDecoration.Underline)
+                Text(
+                    text = stringResource(R.string.Artist),
+                    textDecoration = TextDecoration.Underline
+                )
                 TextField(
-                    value = audio.artist,
+                    value = audio.artist ?: "",
                     onValueChange = { onAudioChange(audio.copy(artist = it)) },
+                    placeholder = { Text(stringResource(R.string.no_artist_set_yet)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                 )
-                Text(text = "Genre", textDecoration = TextDecoration.Underline)
+                Text(
+                    text = stringResource(R.string.Genre), textDecoration = TextDecoration.Underline
+                )
                 TextField(
                     value = audio.genre ?: "",
-                    placeholder = { Text("No genre set yet") },
+                    placeholder = { Text(stringResource(R.string.no_genre_set_yet)) },
                     onValueChange = { onAudioChange(audio.copy(genre = it)) },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -98,17 +107,22 @@ fun HorizontalEditAudioView(
                         capitalization = KeyboardCapitalization.Sentences
                     )
                 )
-                Text(text = "Album", textDecoration = TextDecoration.Underline)
+                Text(
+                    text = stringResource(R.string.Album), textDecoration = TextDecoration.Underline
+                )
                 TextField(
                     value = audio.album ?: "",
-                    placeholder = { Text("No album set yet") },
+                    placeholder = { Text(stringResource(R.string.no_album_set_yet)) },
                     onValueChange = { onAudioChange(audio.copy(album = it)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                 )
-                Text(text = "Release Date", textDecoration = TextDecoration.Underline)
+                Text(
+                    text = stringResource(R.string.release_date),
+                    textDecoration = TextDecoration.Underline
+                )
                 DateChooser(
                     minYear = 1900, getUIStyle = getUIStyle,
                     modifier = Modifier
@@ -119,7 +133,7 @@ fun HorizontalEditAudioView(
                     onDaySelected = { if (audio.month != null) onAudioChange(audio.copy(day = it)) },
                     onMonthSelected = { onAudioChange(audio.copy(month = it)) }
                 )
-                LyricsOptions( lyrics) { onLyricsChange(it) }
+                LyricsOptions(lyrics) { onLyricsChange(it) }
             }
         }
         Column(
@@ -130,13 +144,16 @@ fun HorizontalEditAudioView(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = "Picture", textDecoration = TextDecoration.Underline)
+            Text(
+                text = stringResource(R.string.cover_image),
+                textDecoration = TextDecoration.Underline
+            )
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(audio.picture)
                     .crossfade(true)
                     .build(),
-                contentDescription = "Album art",
+                contentDescription = stringResource(R.string.cover_image),
                 placeholder = painterResource(R.drawable.unknown_track),
                 error = painterResource(R.drawable.unknown_track),
                 modifier = Modifier
@@ -147,16 +164,12 @@ fun HorizontalEditAudioView(
             )
             ImagePicker(
                 allMediaArtwork, enabled, isLandscape = true, getUIStyle = getUIStyle
-            ) { picture ->
-                onAudioChange(audio.copy(picture = picture))
-            }
+            ) { picture -> onAudioChange(audio.copy(picture = picture)) }
             Spacer(Modifier.padding(vertical = 15.dp))
             Button(
                 onClick = { onUpdate(audio, lyrics.takeIf { ls -> ls.plain.isNotBlank() }) },
                 modifier = Modifier.padding(8.dp)
-            ) {
-                Text("Update Song")
-            }
+            ) { Text(stringResource(R.string.update_track)) }
         }
 
     }

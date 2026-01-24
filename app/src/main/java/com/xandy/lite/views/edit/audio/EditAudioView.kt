@@ -5,9 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
@@ -24,25 +21,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
+
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,18 +41,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.xandy.lite.controllers.view.models.EditAudioVM
+import com.xandy.lite.R
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.AudioWithPls
-import com.xandy.lite.db.tables.LyricLine
 import com.xandy.lite.db.tables.Lyrics
-import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.functions.SelectImageModal
 import com.xandy.lite.ui.functions.item.details.Artwork
 import com.xandy.lite.ui.GetUIStyle
@@ -72,7 +61,6 @@ import java.time.Year
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlin.math.roundToLong
 
 
 @Composable
@@ -98,7 +86,7 @@ fun EditAudioView(
 }
 
 @Composable
-fun ImagePicker(
+internal fun ImagePicker(
     artworkList: List<Uri>, enabled: Boolean, isLandscape: Boolean, getUIStyle: GetUIStyle,
     onImagePicked: (Uri) -> Unit
 ) {
@@ -125,7 +113,7 @@ fun ImagePicker(
         onClick = { showModal = true },
         enabled = enabled, modifier = Modifier.padding(vertical = 4.dp)
     ) {
-        Text("Choose Artwork")
+        Text(stringResource(R.string.choose_artwork))
     }
 }
 
@@ -225,7 +213,7 @@ private fun LocalArtwork(
 }
 
 @Composable
-fun DateChooser(
+internal fun DateChooser(
     minYear: Int, maxYear: Int = Year.now().value, getUIStyle: GetUIStyle,
     selectedYear: Int?, selectedMonth: Int?, selectedDay: Int?,
     onYearSelected: (Int?) -> Unit, onMonthSelected: (Int?) -> Unit, onDaySelected: (Int?) -> Unit,
@@ -244,13 +232,13 @@ fun DateChooser(
     }
     Row(modifier = modifier) {
         SimpleDropdown(
-            label = "Year", options = years.map { it.toString() },
+            label = stringResource(R.string.Year), options = years.map { it.toString() },
             selectedIndex = selectedYear?.let { years.indexOf(it) } ?: -1,
             onSelectIndex = { idx -> onYearSelected(if (idx >= 0) years[idx] else null) },
             modifier = Modifier.weight(1f)
         )
         SimpleDropdown(
-            label = "Month",
+            label = stringResource(R.string.Month),
             options = listOf("—") + monthNames, // index 0 = none, indexes 1..12 = months
             selectedIndex = selectedMonth?.let {
                 if (it in 1..12) it else -1
@@ -275,7 +263,7 @@ fun DateChooser(
             else listOf()
 
         SimpleDropdown(
-            label = "Day",
+            label = stringResource(R.string.Day),
             tint = if (dayOptions.isEmpty()) getUIStyle.disabledThemedColor()
             else getUIStyle.themedOnContainerColor(),
             enabled = dayOptions.isNotEmpty(),
@@ -333,11 +321,11 @@ private fun SimpleDropdown(
 }
 
 @Composable
-fun LyricsOptions(lyrics: Lyrics, onLyricsChange: (Lyrics) -> Unit) {
-    Text(text = "Lyrics", textDecoration = TextDecoration.Underline)
+internal fun LyricsOptions(lyrics: Lyrics, onLyricsChange: (Lyrics) -> Unit) {
+    Text(text = stringResource(R.string.Lyrics), textDecoration = TextDecoration.Underline)
     TextField(
         value = lyrics.plain,
-        placeholder = { Text("Type or paste lyrics here") },
+        placeholder = { Text(stringResource(R.string.type_paste_lyrics_here)) },
         onValueChange = { onLyricsChange(lyrics.copy(plain = it)) },
         modifier = Modifier
             .fillMaxWidth()
@@ -345,11 +333,11 @@ fun LyricsOptions(lyrics: Lyrics, onLyricsChange: (Lyrics) -> Unit) {
     )
     TextField(
         value = lyrics.description ?: "",
-        placeholder = { Text("Enter Description here") },
+        placeholder = { Text(stringResource(R.string.enter_description_here)) },
         onValueChange = { onLyricsChange(lyrics.copy(description = it)) },
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp)
     )
-    Text("For more advanced lyric options (e.g synchronization, translation), use the Lyric Editor.")
+    Text(stringResource(R.string.for_more_advanced_lyric_options))
 }

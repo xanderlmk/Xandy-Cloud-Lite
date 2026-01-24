@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -31,7 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,8 +53,10 @@ import androidx.media3.session.R as AndroidR
 @Composable
 fun PlaylistRow(
     pl: PlaylistWithCount, getUIStyle: GetUIStyle, ci: ContentIcons,
-    onDelete: () -> Unit, onClick: () -> Unit
+    onDelete: () -> Unit, onChangeName: () -> Unit, onClick: () -> Unit
 ) {
+    val trackCount = if (pl.songCount == 1) stringResource(R.string.one_track)
+    else stringResource(R.string.num_tracks, pl.songCount)
     var expanded by rememberSaveable { mutableStateOf(false) }
     Row(
         Modifier
@@ -75,7 +78,8 @@ fun PlaylistRow(
         )
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Text(
-                "${pl.songCount} tracks", textAlign = TextAlign.End, maxLines = 1, fontSize = 13.sp,
+                trackCount, textAlign = TextAlign.End,
+                maxLines = 1, fontSize = 13.sp,
                 modifier = Modifier.offset(-(20.dp))
             )
             Box(
@@ -89,7 +93,12 @@ fun PlaylistRow(
                 }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(
-                        text = { Text("Delete") },
+                        text = { Text(stringResource(R.string.edit_name)) },
+                        trailingIcon = { ci.ContentIcon(Icons.Default.Edit) },
+                        onClick = { onChangeName(); expanded = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.Delete)) },
                         trailingIcon = { ci.ContentIcon(Icons.Default.Delete) },
                         onClick = { onDelete(); expanded = false },
                     )
@@ -111,7 +120,7 @@ fun PlaylistRow(pl: Playlist, getUIStyle: GetUIStyle, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start
     ) {
-        if (pl.picture != null) Artwork(pl.picture, LocalContext.current, Modifier . size (50.dp))
+        if (pl.picture != null) Artwork(pl.picture, LocalContext.current, Modifier.size(50.dp))
         else Artwork(Modifier.size(50.dp))
         Text(pl.name, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
@@ -159,10 +168,7 @@ fun PlaylistOrderRow(
             }
             Row {
                 IconButton(onClick = onShuffle, enabled = enabled) {
-                    ci.ContentIcon(
-                        painterResource(AndroidR.drawable.media3_icon_shuffle_on),
-                        enabled = enabled
-                    )
+                    ci.ContentIcon(AndroidR.drawable.media3_icon_shuffle_on, enabled = enabled)
                 }
                 IconButton(onClick = onPlay, enabled = enabled) {
                     ci.ContentIcon(icon, enabled = enabled)
@@ -175,16 +181,16 @@ fun PlaylistOrderRow(
                 onClick = { onUpdate(order.reverseSort()) }
             )
             DropdownMenuItem(
-                text = { Text("Date added") },
-                onClick = { onUpdate(SongOrder.CreatedOn.toOrderedByClass(asc)) }
-            )
-            DropdownMenuItem(
-                text = { Text("Title") },
+                text = { Text(stringResource(R.string.Title)) },
                 onClick = { onUpdate(SongOrder.Title.toOrderedByClass(asc)) }
             )
             DropdownMenuItem(
-                text = { Text("Artist") },
+                text = { Text(stringResource(R.string.Artist)) },
                 onClick = { onUpdate(SongOrder.Artist.toOrderedByClass(asc)) }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.date_added)) },
+                onClick = { onUpdate(SongOrder.CreatedOn.toOrderedByClass(asc)) }
             )
         }
     }

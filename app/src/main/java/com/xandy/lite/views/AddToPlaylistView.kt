@@ -19,8 +19,10 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.xandy.lite.R
 import com.xandy.lite.ui.functions.item.details.PlaylistRow
 import com.xandy.lite.controllers.view.models.AddToLocalPlVM
 import com.xandy.lite.ui.functions.AddPlDialog
@@ -31,8 +33,9 @@ import com.xandy.lite.ui.GetUIStyle
 @Composable
 fun AddToPlaylistView(
     getUIStyle: GetUIStyle, modifier: Modifier, vm: AddToLocalPlVM,
-    onAdd: (String) -> Unit, onAddNew: (String) -> Unit, enabled: Boolean,
-    showDialog: MutableState<Boolean>
+    onAddToPl: (String) -> Unit, onAddNew: (String) -> Unit,
+    onAddToPlayNext: () -> Unit, onEnqueue: () -> Unit, enabled: Boolean,
+    showDialog: MutableState<Boolean>, showAdd: Boolean
 ) {
     val pls by vm.pls.collectAsStateWithLifecycle()
     val ci = ContentIcons(getUIStyle)
@@ -40,7 +43,7 @@ fun AddToPlaylistView(
     Box(modifier = modifier) {
         AddPlDialog(
             showDialog = showDialog.value, getUIStyle = getUIStyle, enabled = enabled,
-            onDismiss = {  if (enabled) showDialog.value = false },
+            onDismiss = { if (enabled) showDialog.value = false },
             onSubmit = { onAddNew(it) },
         )
         LazyColumn(modifier = Modifier.fillMaxWidth()) {
@@ -50,17 +53,67 @@ fun AddToPlaylistView(
                         .fillMaxWidth()
                         .height(60.dp)
                         .clickable { showDialog.value = true }
-                        .border(2.dp, getUIStyle.themedOnContainerColor(), RoundedCornerShape(2.dp))
+                        .border(
+                            2.dp,
+                            getUIStyle.themedOnContainerColor(), RoundedCornerShape(2.dp)
+                        )
                         .padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Text("Add new Playlist")
-                    ci.ContentIcon(Icons.Default.Add)
+                    Text(stringResource(R.string.add_new_playlist))
+                    ci.ContentIcon(
+                        Icons.Default.Add, modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+            }
+            if (showAdd) {
+                item {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(60.dp)
+                            .clickable { onEnqueue() }
+                            .border(
+                                2.dp,
+                                getUIStyle.themedOnContainerColor(), RoundedCornerShape(2.dp)
+                            )
+                            .padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(stringResource(R.string.Enqueue))
+                        ci.ContentIcon(
+                            R.drawable.baseline_add_to_queue,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
+                }
+
+                item {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(60.dp)
+                            .clickable { onAddToPlayNext() }
+                            .border(
+                                2.dp,
+                                getUIStyle.themedOnContainerColor(), RoundedCornerShape(2.dp)
+                            )
+                            .padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(stringResource(R.string.play_next))
+                        ci.ContentIcon(
+                            R.drawable.queue_play_next,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
                 }
             }
             items(pls) { pl ->
-                PlaylistRow(pl, getUIStyle) { onAdd(pl.id) }
+                PlaylistRow(pl, getUIStyle) { onAddToPl(pl.id) }
             }
         }
     }

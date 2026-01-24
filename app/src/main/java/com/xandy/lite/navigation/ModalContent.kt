@@ -18,7 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,8 +32,7 @@ import com.xandy.lite.views.lyrics.LyricIndex
 class ModalContent(
     private val navController: NavHostController,
     private val getUIStyle: GetUIStyle, private val navVM: NavViewModel,
-    private val cr: String, private val onClose: () -> Unit
-) {
+    private val cr: String, private val onClose: () -> Unit,
     private val onNavigate: (String) -> Unit = {
         if (cr != it) {
             navVM.updateIndexListener(LyricIndex.UNAVAILABLE)
@@ -42,6 +41,8 @@ class ModalContent(
             onClose()
         }
     }
+) {
+
     private val mdModifier = Modifier
         .padding(horizontal = 4.dp)
         .size(28.dp)
@@ -57,7 +58,8 @@ class ModalContent(
         val fontSize = returnFontSizeBasedOnDp()
         CustomRow(onClick = { onNavigate(LocalMusicDestination.route) }) {
             Text(
-                text = "Home", fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
+                text = stringResource(R.string.Home),
+                fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
@@ -70,13 +72,14 @@ class ModalContent(
     @Composable
     fun LyricList() {
         val fontSize = returnFontSizeBasedOnDp()
-        CustomRow(onClick = { onNavigate(LyricsListDestination.route)}) {
+        CustomRow(onClick = { onNavigate(LyricsListDestination.route) }) {
             Text(
-                text = "Lyric List", fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
+                text = stringResource(R.string.lyric_list), fontSize = fontSize,
+                color = getUIStyle.themedOnContainerColor(),
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
-                painterResource(R.drawable.rounded_list), "Lyric list", mdModifier,
+                R.drawable.rounded_list, "Lyric list", mdModifier,
                 tint = getUIStyle.getColorScheme().onPrimaryContainer
             )
         }
@@ -88,7 +91,8 @@ class ModalContent(
         CustomRow(onClick = { onNavigate(SettingsDestination.route) })
         {
             Text(
-                text = "Settings", fontSize = fontSize, color = getUIStyle.themedOnContainerColor(),
+                text = stringResource(R.string.Settings), fontSize = fontSize,
+                color = getUIStyle.themedOnContainerColor(),
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
@@ -101,7 +105,9 @@ class ModalContent(
     @Composable
     fun AutoUpdateEnabled(autoUpdate: Boolean) {
         val fontSize = returnFontSizeBasedOnDp()
-        val text = if (autoUpdate) "Auto-Update Enabled" else "Auto-Update Disabled"
+        val text = stringResource(
+            if (autoUpdate) R.string.auto_update_enabled else R.string.auto_update_disabled
+        )
         val icon = if (autoUpdate) R.drawable.toggle_on else R.drawable.toggle_off
         CustomRow(onClick = { navVM.toggleAutoUpdate(!autoUpdate) }) {
             Text(
@@ -109,7 +115,7 @@ class ModalContent(
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
-                painterResource(icon), "Main Settings", mdModifier,
+                icon, "Main Settings", mdModifier,
                 tint = getUIStyle.getColorScheme().onPrimaryContainer
             )
         }
@@ -119,7 +125,9 @@ class ModalContent(
     @Composable
     fun IdWritingUpdateEnabled(writingEnabled: Boolean) {
         val fontSize = returnFontSizeBasedOnDp()
-        val text = if (writingEnabled) "ID Writing Enabled" else "ID Writing Disabled"
+        val text = stringResource(
+            if (writingEnabled) R.string.id_writing_enabled else R.string.id_writing_disabled
+        )
         val icon = if (writingEnabled) R.drawable.toggle_on else R.drawable.toggle_off
         CustomRow(onClick = { navVM.toggleWritingEnabled(!writingEnabled) }) {
             Text(
@@ -127,7 +135,7 @@ class ModalContent(
                 style = MaterialTheme.typography.bodyLarge
             )
             ci.ContentIcon(
-                painterResource(icon), "Main Settings", mdModifier,
+                icon, "Main Settings", mdModifier,
                 tint = getUIStyle.getColorScheme().onPrimaryContainer
             )
         }

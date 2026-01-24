@@ -27,14 +27,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.xandy.lite.R
 import com.xandy.lite.controllers.view.models.LyricsVM
 import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.models.lyrics.adapter.LyricsXclfAdapter
 import com.xandy.lite.models.XCToast
-import com.xandy.lite.models.application.AppVMProvider
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.ellipsize
 import com.xandy.lite.models.lyrics.adapter.ExportResult
@@ -57,12 +57,11 @@ import my.nanihadesuka.compose.LazyColumnScrollbar
 @Serializable
 private data class Pair(
     @SerialName(value = "Xandy-Cloud.Full.Lyrics")
-    val l : Lyrics?, val b: Boolean
-): Parcelable
+    val l: Lyrics?, val b: Boolean
+) : Parcelable
 
 @Composable
-fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
-    val lyricsVM: LyricsVM = viewModel(factory = AppVMProvider.Factory)
+fun LyricsListView(lyricsVM: LyricsVM, onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
     val allLyrics by lyricsVM.lyricsList.collectAsStateWithLifecycle()
     val state = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -109,7 +108,7 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                         enabled = true
                     }
 
-                    is InsertResult.Failure -> toast.makeMessage("Import Failed.")
+                    is InsertResult.Failure -> toast.makeMessage(toast.importFailed)
                     is InsertResult.Success -> toast.makeMessage("Imported Successfully!")
                 }
                 if (result !is InsertResult.Exists) onFinish()
@@ -130,7 +129,7 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.fillMaxSize()
             ) {
-                Text("No lyrics available")
+                Text(stringResource(R.string.no_lyrics_available))
             } else LazyColumn {
                 items(allLyrics, key = { it.lyrics.id }) { l ->
                     LyricsRow(
@@ -162,10 +161,14 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                     ) {
                         DropdownMenuItem(
                             onClick = { expanded = false; onEdit("") },
-                            text = { Text("Create") })
+                            text = { Text(stringResource(R.string.Create)) })
                         DropdownMenuItem(
-                            onClick = { launcher.launch(arrayOf("application/octet-stream")) },
-                            text = { Text("Import") }
+                            onClick = {
+                                launcher.launch(
+                                    arrayOf("application/octet-stream", LyricsXclfAdapter.MIME_TYPE)
+                                )
+                            },
+                            text = { Text(stringResource(R.string.Import)) }
 
                         )
                     }
@@ -181,7 +184,7 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                         enabled = false
                         val lyrics = showModal.l
                         if (lyrics == null) {
-                            toast.makeMessage("Null lyrics"); onFinish()
+                            toast.makeMessage(toast.nullLyrics); onFinish()
                             return@launch
                         }
                         val result = lyricsVM.deleteLyrics(lyrics)
@@ -194,7 +197,9 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
             )
         }
         if (showExportDialog.b) {
-            var submitButtonText by rememberSaveable { mutableStateOf("Export") }
+            var submitButtonText by rememberSaveable {
+                mutableStateOf(context.getString(R.string.Export))
+            }
             var exists by rememberSaveable { mutableStateOf(false) }
             ExportLyricDialog(
                 onDismiss = { if (enabled) showExportDialog = Pair(null, false) },
@@ -203,7 +208,7 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                         enabled = false
                         val lyrics = showExportDialog.l
                         if (lyrics == null) {
-                            toast.makeMessage("Null lyrics"); onFinish()
+                            toast.makeMessage(toast.nullLyrics); onFinish()
                             return@launch
                         }
                         val result = LyricsXclfAdapter.exportLyricsToXclf(it, lyrics, context)
@@ -232,7 +237,7 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                         enabled = false
                         val lyrics = showExportDialog.l
                         if (lyrics == null) {
-                            toast.makeMessage("Null lyrics"); onFinish()
+                            toast.makeMessage(toast.nullLyrics); onFinish()
                             return@launch
                         }
                         val result = LyricsXclfAdapter.exportNewLyricsToXclf(it, lyrics, context)
@@ -246,7 +251,7 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                         enabled = false
                         val lyrics = showExportDialog.l
                         if (lyrics == null) {
-                            toast.makeMessage("Null lyrics"); onFinish()
+                            toast.makeMessage(toast.nullLyrics); onFinish()
                             return@launch
                         }
                         val name = "${it ?: lyrics.id}.xclf"
@@ -269,7 +274,7 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                         enabled = false
                         val lyrics = showImportDialog.l
                         if (lyrics == null) {
-                            toast.makeMessage("Null lyrics"); onFinish()
+                            toast.makeMessage(toast.nullLyrics); onFinish()
                             return@launch
                         }
                         val result = lyricsVM.updateLyrics(lyrics)
@@ -280,8 +285,8 @@ fun LyricsListView(onEdit: (String) -> Unit, getUIStyle: GetUIStyle) {
                 },
                 getUIStyle = getUIStyle, enabled = enabled,
                 title = "Overwrite lyrics?",
-                text = "These lyrics already exist!\nWould you like to overwrite it?",
-                confirmButtonText = "Overwrite"
+                text = "These lyrics already exist!\nOverwriting will replace the existing lyrics.",
+                confirmButtonText = stringResource(R.string.Overwrite)
             )
         }
     }

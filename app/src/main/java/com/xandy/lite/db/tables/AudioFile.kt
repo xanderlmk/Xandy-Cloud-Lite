@@ -3,6 +3,7 @@ package com.xandy.lite.db.tables
 import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
+import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.room.ColumnInfo
@@ -12,9 +13,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.xandy.lite.models.DateAsLong
 import com.xandy.lite.models.UriAsString
-import com.xandy.lite.models.itemKey
-import com.xandy.lite.models.ui.MediaItemWithCreatedOn
-import com.xandy.lite.models.uri
+import com.xandy.lite.models.application.AppStrings
+import com.xandy.lite.models.application.AppValues
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import java.util.Date
@@ -23,6 +23,8 @@ import java.util.UUID
 
 private const val SONG_ID = "song_id"
 private const val FILE_ID = "file_id"
+private const val CREATED_ON = "created_on"
+private const val DATE_MODIFIED = "date_modified"
 
 /**
  * Local Audio File
@@ -88,7 +90,8 @@ data class AudioFile(
     @ColumnInfo(name = "display_name")
     val displayName: String,
     val title: String,
-    val artist: String,
+    @ColumnInfo(defaultValue = "NULL")
+    val artist: String? = null,
     val album: String?,
     val genre: String?,
     @ColumnInfo(name = "duration_millis")
@@ -102,13 +105,15 @@ data class AudioFile(
     @Serializable(with = UriAsString::class)
     val picture: Uri,
     @Serializable(with = DateAsLong::class)
-    @ColumnInfo(name = "created_on")
+    @ColumnInfo(name = CREATED_ON)
     val createdOn: Date,
     @Serializable(with = DateAsLong::class)
-    @ColumnInfo(name = "date_modified")
+    @ColumnInfo(name = DATE_MODIFIED)
     val dateModified: Date,
     @ColumnInfo(defaultValue = "false")
     val hidden: Boolean = false,
+    @ColumnInfo(defaultValue = "false")
+    val favorite: Boolean = false,
     @ColumnInfo(name = "permanently_hidden", defaultValue = "false")
     val permanentlyHidden: Boolean = false,
     @ColumnInfo(name = "lyrics_id", defaultValue = "NULL")
@@ -117,23 +122,41 @@ data class AudioFile(
     val bucketId: Long? = null,
     @ColumnInfo(name = "volume_name")
     val volumeName: String? = null
-) : Parcelable
+) : Parcelable {
+    companion object {
+        val UNDEFINED = AudioFile(
+            fileId = Long.MIN_VALUE,
+            uri = Uri.EMPTY,
+            displayName = "####",
+            title = "####", album = null, genre = null,
+            durationMillis = 0,
+            picture = Uri.EMPTY,
+            createdOn = Date(),
+            dateModified =  Date()
+        )
+    }
+}
 
-fun List<AudioFile>.toMediaItems() = map { song -> song.toMediaItem() }
+fun List<AudioFile>.toMediaItems(appStrings: AppStrings) =
+    map { song -> song.toMediaItem(appStrings) }
 
 fun AudioFile.toBundle(): Bundle {
     val bundle = Bundle()
     bundle.putString("uri", this.uri.toString())
     bundle.putLong(FILE_ID, this.fileId)
+    bundle.putBoolean("favorite", this.favorite)
+    bundle.putLong(CREATED_ON, this.createdOn.time)
+    bundle.putLong(DATE_MODIFIED, this.dateModified.time)
+    bundle.putBoolean("null_artist", this.artist == null)
     return bundle
 }
 
-fun AudioFile.toMediaItem() = MediaItem.Builder()
+fun AudioFile.toMediaItem(appStrings: AppStrings) = MediaItem.Builder()
     .setMediaId(this.id)
     .setUri(this.uri)
     .setMediaMetadata(
         MediaMetadata.Builder()
-            .setArtist(this.artist)
+            .setArtist(this.artist ?: appStrings.unknownArtist)
             .setTitle(this.title)
             .setGenre(this.genre)
             .setArtworkUri(this.picture)
@@ -145,12 +168,7 @@ fun AudioFile.toMediaItem() = MediaItem.Builder()
     )
     .build()
 
-fun AudioFile.toMediaItemWithCreatedOn() =
-    MediaItemWithCreatedOn(this.toMediaItem(), this.createdOn)
-
-fun List<AudioFile>.toMediaItemsWithCreatedOn() = this.map { audio ->
-    MediaItemWithCreatedOn(audio.toMediaItem(), audio.createdOn)
-}
+fun List<AudioFile>.firstId() = this.first().id
 
 /**
  * Convert the year, month, and day into a formatted string such where
@@ -174,27 +192,41 @@ fun AudioFile.datedString() = when {
 
 fun AudioFile.isNotInternal() = !this.uri.toString().startsWith("content://media/internal")
 
-fun MediaItem.toAudioFile(unknownTrackUri: Uri) = AudioFile(
-    id = this.itemKey(), uri = this.uri(), title = this.title(), artist = this.artist(),
-    album = this.album(), durationMillis = this.mediaMetadata.durationMs ?: 0L,
-    displayName = displayTitle(), picture = this.artwork() ?: unknownTrackUri,
-    genre = this.genre(), createdOn = Date(),
+fun MediaItem.toAudioFile(av: AppValues) = AudioFile(
+    id = this.itemKey(), uri = this.uri(), title = this.title(av.unknown),
+    artist = this.artist(av.unknownArtist), album = this.album(),
+    durationMillis = this.mediaMetadata.durationMs ?: 0L,
+    displayName = displayTitle(av.unknown), picture = this.artwork() ?: av.unknownTrackUri,
+    genre = this.genre(), createdOn = this.createdOn(), favorite = this.isFavorite(),
     year = this.year(), day = this.day(), month = this.month(), fileId = this.longId(),
-    dateModified = Date()
+    dateModified = this.dateModified()
 )
 
-private const val UNKNOWN = "Unknown Title"
-private fun MediaItem.title() = this.mediaMetadata.title?.toString() ?: UNKNOWN
-fun MediaItem.artist() = this.mediaMetadata.artist?.toString() ?: "Unknown Artist"
+/** Media id which should be the AudioFile UUID */
+fun MediaItem.itemKey() = this.mediaId
+
+fun MediaItem.uri() =
+    this.localConfiguration?.uri ?: this.requestMetadata.mediaUri
+    ?: this.mediaMetadata.extras!!.getString("uri")!!.toUri()
+
+private fun MediaItem.title(str: String) = this.mediaMetadata.title?.toString() ?: str
+fun MediaItem.artist(str: String) = this.mediaMetadata.artist?.toString() ?: str
 private fun MediaItem.genre() = this.mediaMetadata.genre?.toString()
 private fun MediaItem.artwork() = this.mediaMetadata.artworkUri
 private fun MediaItem.album() = this.mediaMetadata.albumTitle?.toString()
-private fun MediaItem.displayTitle() = this.mediaMetadata.displayTitle?.toString() ?: UNKNOWN
+private fun MediaItem.displayTitle(str: String) = this.mediaMetadata.displayTitle?.toString() ?: str
 
 private fun MediaItem.year() = this.mediaMetadata.releaseYear
 private fun MediaItem.day() = this.mediaMetadata.releaseDay
 private fun MediaItem.month() = this.mediaMetadata.releaseMonth
-private fun MediaItem.longId() = this.mediaMetadata.extras?.getLong(FILE_ID) ?: 0
+fun MediaItem.longId() = this.mediaMetadata.extras?.getLong(FILE_ID) ?: 0
+fun MediaItem.isFavorite() = this.mediaMetadata.extras?.getBoolean("favorite") ?: false
+fun MediaItem.createdOn() =
+    this.mediaMetadata.extras?.getLong(CREATED_ON)?.let { Date(it) } ?: Date()
+
+fun MediaItem.dateModified() =
+    this.mediaMetadata.extras?.getLong(DATE_MODIFIED)?.let { Date(it) } ?: Date()
+
 
 fun MediaItem.updateMetadata(updated: AudioFile): MediaItem {
     val newMetadata = this.mediaMetadata.buildUpon()
@@ -206,6 +238,32 @@ fun MediaItem.updateMetadata(updated: AudioFile): MediaItem {
         .setReleaseMonth(updated.month)
         .setReleaseDay(updated.day)
         .setExtras(updated.toBundle())
+        .build()
+    return this.buildUpon()
+        .setMediaMetadata(newMetadata)
+        .build()
+}
+
+private fun MediaItem.toUpdatedBundle(isFavorite: Boolean): Bundle {
+    val bundle = Bundle()
+    bundle.putString("uri", this.uri().toString())
+    bundle.putLong(FILE_ID, this.longId())
+    bundle.putBoolean("favorite", isFavorite)
+    bundle.putLong(CREATED_ON, this.createdOn().time)
+    bundle.putLong(DATE_MODIFIED, this.dateModified().time)
+    return bundle
+}
+
+fun MediaItem.replaceIsFavorite(appStrings: AppStrings): MediaItem {
+    val newMetadata = this.mediaMetadata.buildUpon()
+        .setTitle(this.title(appStrings.unknown))
+        .setArtist(this.artist(appStrings.unknownArtist))
+        .setGenre(this.genre())
+        .setArtworkUri(this.artwork())
+        .setReleaseYear(this.year())
+        .setReleaseMonth(this.month())
+        .setReleaseDay(this.day())
+        .setExtras(this.toUpdatedBundle(!this.isFavorite()))
         .build()
     return this.buildUpon()
         .setMediaMetadata(newMetadata)

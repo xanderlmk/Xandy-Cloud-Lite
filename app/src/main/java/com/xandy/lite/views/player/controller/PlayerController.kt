@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -42,7 +43,7 @@ import androidx.media3.session.MediaController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xandy.lite.R
-import com.xandy.lite.models.itemKey
+import com.xandy.lite.db.tables.itemKey
 import com.xandy.lite.navigation.NavViewModel
 import com.xandy.lite.ui.functions.ContentIcons
 import com.xandy.lite.ui.GetUIStyle
@@ -53,14 +54,17 @@ fun PlayerController(
     controller: MediaController, navVM: NavViewModel, onClickSong: () -> Unit,
     getUIStyle: GetUIStyle, modifier: Modifier
 ) {
-    val tracks by navVM.tracks.collectAsStateWithLifecycle()
+    val queue by navVM.queue.collectAsStateWithLifecycle()
     val isPlaying by navVM.isPlaying.collectAsStateWithLifecycle()
     val isLoading by navVM.isLoading.collectAsStateWithLifecycle()
     val repeatMode by navVM.repeatMode.collectAsStateWithLifecycle()
     val shuffleEnabled by navVM.shuffleEnabled.collectAsStateWithLifecycle()
     val sd by navVM.songDetails.collectAsStateWithLifecycle()
     val ci = ContentIcons(getUIStyle)
-    if (!tracks.isEmpty && sd != null) {
+    key(isPlaying, isLoading, repeatMode, shuffleEnabled, Unit, queue.size) {
+        navVM.updatePickedSong(controller.currentMediaItem?.itemKey())
+    }
+    if (sd != null) {
         Box(
             modifier
                 .fillMaxSize()
@@ -112,12 +116,11 @@ fun PlayerController(
                         delay(2_000L); show = true
                     }
                     if (show) Text(
-                        text = "Null songs, click here to reset.",
+                        text = "Null song, click here to reset.",
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .height(60.dp)
                             .clickable {
-                                navVM.updateTracks(controller.currentTracks)
                                 navVM.updatePickedSong(controller.currentMediaItem?.itemKey())
                             }
                     )
@@ -132,11 +135,10 @@ fun PlayerController(
                     .fillMaxWidth(.375f)
             ) {
                 IconButton(onClick = {
-                   handleSkipPrevious(repeatMode, controller)
+                    handleSkipPrevious(repeatMode, controller)
                 }) {
                     ci.ContentIcon(
-                        painterResource(R.drawable.baseline_skip_previous),
-                        contentDescription = "Prev"
+                        R.drawable.baseline_skip_previous, contentDescription = "Prev"
                     )
                 }
                 if (isLoading) {
@@ -145,8 +147,7 @@ fun PlayerController(
                     if (isPlaying) {
                         IconButton(onClick = { controller.pause() }) {
                             ci.ContentIcon(
-                                painterResource(R.drawable.baseline_pause),
-                                contentDescription = "Pause"
+                                R.drawable.baseline_pause, contentDescription = "Pause"
                             )
                         }
                     } else {
@@ -156,54 +157,29 @@ fun PlayerController(
                     }
                 }
                 IconButton(onClick = {
-                   handleSkipNext(shuffleEnabled, repeatMode, controller)
+                    navVM.handleSkipNext(shuffleEnabled, repeatMode, controller)
                 }) {
                     ci.ContentIcon(
-                        painterResource(R.drawable.baseline_skip_next),
-                        contentDescription = "Next"
+                        R.drawable.baseline_skip_next, contentDescription = "Next"
                     )
                 }
             }
         }
-    } else LaunchedEffect(Unit) {
-        delay(3_000L)
-        navVM.updateTracks(controller.currentTracks)
-        navVM.updatePickedSong(controller.currentMediaItem?.itemKey())
     }
 }
-private fun handleSkipPrevious(repeatMode: Int, mc: MediaController) {
+
+fun handleSkipPrevious(repeatMode: Int, mc: MediaController) {
     val pos = mc.currentPosition
     if (repeatMode == Player.REPEAT_MODE_OFF || repeatMode == Player.REPEAT_MODE_ONE) {
         if (pos > 5_000) {
             mc.seekTo(0)
         } else {
             if (!mc.hasPreviousMediaItem())
-                mc.seekToDefaultPosition(mc.mediaItemCount - 1)
+                mc.seekToDefaultPosition((mc.mediaItemCount - 1).coerceAtLeast(0))
             else mc.seekToPrevious()
         }
     } else {
         // REPEAT_MODE_ALL
         if (pos > 5_000) mc.seekTo(0) else mc.seekToPrevious()
-    }
-}
-
-private fun handleSkipNext(
-    shuffleEnabled: Boolean, repeatMode: Int, mc: MediaController
-) {
-    if (repeatMode == Player.REPEAT_MODE_OFF || repeatMode == Player.REPEAT_MODE_ONE) {
-        if (!mc.hasNextMediaItem()) {
-            if (shuffleEnabled) {
-                val songCount = mc.mediaItemCount.takeIf { it > 0 } ?: return
-                val index = (0 until songCount).random().takeIf {
-                    it != mc.currentMediaItemIndex
-                } ?: 0
-                mc.seekToDefaultPosition(index)
-            } else mc.seekToDefaultPosition(0)
-        } else {
-            mc.seekToNext()
-        }
-    } else {
-        // REPEAT_MODE_ALL
-        mc.seekToNext()
     }
 }

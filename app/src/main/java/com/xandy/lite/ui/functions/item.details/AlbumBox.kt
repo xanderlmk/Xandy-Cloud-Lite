@@ -21,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,6 +37,8 @@ import com.xandy.lite.ui.GetUIStyle
 
 @Composable
 fun AlbumBox(album: Album, getUIStyle: GetUIStyle, onClick: () -> Unit) {
+    val trackCount = if (album.songCount == 1) stringResource(R.string.one_track)
+    else stringResource(R.string.num_tracks, album.songCount)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -63,11 +65,30 @@ fun AlbumBox(album: Album, getUIStyle: GetUIStyle, onClick: () -> Unit) {
             maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             lineHeight = 16.sp
         )
-        Text(
-            text = album.artist, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 10.dp), lineHeight = 13.sp,
-            textAlign = TextAlign.Center
-        )
+
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = album.artist,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(start = 5.dp)
+                    .weight(1f, fill = false),
+                lineHeight = 13.sp,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = " | $trackCount",
+                fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Clip,
+                modifier = Modifier.padding(end = 5.dp), lineHeight = 13.sp,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -84,7 +105,7 @@ fun PlayOptions(
         horizontalArrangement = Arrangement.End
     ) {
         IconButton(onClick = onShuffle) {
-            ci.ContentIcon(painterResource(AndroidR.drawable.media3_icon_shuffle_on))
+            ci.ContentIcon(AndroidR.drawable.media3_icon_shuffle_on)
         }
         IconButton(onClick = onPlay) {
             ci.ContentIcon(icon)

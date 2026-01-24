@@ -20,7 +20,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.xandy.lite.R
 import com.xandy.lite.models.ui.order.by.OrderQueueBy
 import com.xandy.lite.models.ui.order.by.QueueOrder
 import com.xandy.lite.ui.functions.ContentIcons
@@ -59,7 +61,7 @@ fun QueueRow(
                         OrderQueueBy.ArtistDESC -> "Artist Desc"
                         OrderQueueBy.CreatedOnASC -> "Date added Asc"
                         OrderQueueBy.CreatedOnDESC -> "Date added Desc"
-                        OrderQueueBy.Default -> "Default"
+                        OrderQueueBy.Default -> stringResource(R.string.default_language)
                         OrderQueueBy.TitleASC -> "Title Asc"
                         OrderQueueBy.TitleDESC -> "Title Desc"
                     }
@@ -69,7 +71,7 @@ fun QueueRow(
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Default") },
+                text = { Text(stringResource(R.string.default_language)) },
                 onClick = { onClick(QueueOrder.Default) }
             )
             if (currentOrder !is OrderQueueBy.Default) {
@@ -81,15 +83,15 @@ fun QueueRow(
                 HorizontalDivider()
             }
             DropdownMenuItem(
-                text = { Text("Title") },
+                text = { Text(stringResource(R.string.Title)) },
                 onClick = { onClick(QueueOrder.Title) }
             )
             DropdownMenuItem(
-                text = { Text("Artist") },
+                text = { Text(stringResource(R.string.Artist)) },
                 onClick = { onClick(QueueOrder.Artist) }
             )
             DropdownMenuItem(
-                text = { Text("Date added") },
+                text = { Text(stringResource(R.string.date_added)) },
                 onClick = { onClick(QueueOrder.CreatedOn) }
             )
         }

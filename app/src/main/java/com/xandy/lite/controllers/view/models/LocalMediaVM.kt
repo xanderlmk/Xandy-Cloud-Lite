@@ -4,17 +4,17 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xandy.lite.controllers.Controller
-import com.xandy.lite.controllers.setQueue
 import com.xandy.lite.db.lyrics.repo.LyricsRepository
 import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Bucket
 import com.xandy.lite.db.tables.Playlist
-import com.xandy.lite.db.tables.toMediaItems
-import com.xandy.lite.models.itemKey
+import com.xandy.lite.models.application.toStrings
+import com.xandy.lite.models.ui.Album
+import com.xandy.lite.models.ui.Artist
+import com.xandy.lite.models.ui.Genre
 import com.xandy.lite.models.ui.LocalMediaStates
 import com.xandy.lite.models.ui.LocalMusicTabs
-import com.xandy.lite.models.ui.MediaItemWithCreatedOn
 import com.xandy.lite.navigation.UIRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -37,18 +37,19 @@ class LocalMediaVM(
         initialValue = emptyList()
     )
     private val mediaTypes = combine(
-        songRepository.localAlbums, songRepository.localArtists, songRepository.localGenres
-    ) { albums, artists, genres ->
-        Triple(albums, artists, genres)
+        songRepository.localAlbums, songRepository.localArtists, songRepository.localGenres,
+        songRepository.favorites
+    ) { albums, artists, genres, favorites ->
+        MediaTypes(albums, artists, genres, favorites)
     }
 
     val musicLibrary = combine(
         songRepository.audioFiles, songRepository.bucketsWithAudio, songRepository.localPlaylists,
-        songRepository.hiddenAudio, mediaTypes
+        songRepository.hiddenAudios, mediaTypes
     ) { al, bwa, pl, ha, mt ->
         LocalMediaStates(
-            audioUIState = al, plsWithAudios = pl, hiddenAudios = ha, albums = mt.first,
-            artists = mt.second, genres = mt.third, folders = bwa
+            audioUIState = al, plsWithAudios = pl, hiddenAudios = ha, albums = mt.albums,
+            artists = mt.artists, genres = mt.genres, folders = bwa, favorites = mt.favorites
         )
     }.stateIn(
         scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
@@ -75,7 +76,7 @@ class LocalMediaVM(
             al.list.filter { audio ->
                 if (q.isBlank() || !s) return@filter true
                 audio.song.title.contains(q, ignoreCase = true) ||
-                        audio.song.artist.contains(q, ignoreCase = true)
+                        audio.song.artist?.contains(q, ignoreCase = true) ?: false
             }
         }.stateIn(
             scope = viewModelScope, started = SharingStarted.Lazily,
@@ -86,28 +87,44 @@ class LocalMediaVM(
     val unsortedQueue = songRepository.unsortedQueue.stateIn(
         scope = viewModelScope, started = SharingStarted.Eagerly, emptyList()
     )
+
+    val appStrings = songRepository.appValues.toStrings(viewModelScope)
+
     fun addToQueue(list: List<AudioFile>): Boolean =
-        Controller.addToQueue(mediaController.value, list, unsortedQueue.value) {
-            viewModelScope.launch { songRepository.addToQueue(it) }
+        Controller.addToQueue(mediaController.value, list, appStrings.value, unsortedQueue.value) {
+            viewModelScope.launch { songRepository.updateQueue(it) }
         }
-
-    val selectedSongIds = uiRepository.selectedSongIds
-    fun startSelecting(songId: String) = uiRepository.startSelectingSongs(songId)
-
-    fun toggleSong(songId: String) = uiRepository.toggleSong(songId)
 
     fun selectSong(song: AudioFile, list: List<AudioFile>) {
         mediaController.value?.let { ctrl ->
-            setQueue(ctrl, list, song) {
+            Controller.setQueue(ctrl, list, song, appStrings.value) {
                 viewModelScope.launch { songRepository.setNewQueue(it, "") }
             }
             songRepository.updatePickedSong(song.id)
         }
     }
 
+    val selectedSongIds = uiRepository.selectedSongIds
+    fun startSelecting(songId: String) = uiRepository.startSelectingSongs(songId)
+
+    fun toggleSong(songId: String) = uiRepository.toggleSong(songId)
+
+
+    /*fun playNext(song: AudioFile) {
+         mediaController.value?.let { ctrl ->
+             Controller.playNext(ctrl, song, unsortedQueue.value) {
+                 viewModelScope.launch { songRepository.updateQueue(it) }
+             }
+         }
+     }*/
+    fun playNext(song: AudioFile) = songRepository.addItemToPriorityQueue(song)
+
     fun updateTab(tab: LocalMusicTabs) = songRepository.updateLocalTab(tab)
     suspend fun onHideSong(uri: Uri) = songRepository.hideAudioFile(uri.toString())
     suspend fun onShowSong(uri: Uri) = songRepository.showAudioFile(uri.toString())
+    suspend fun onFavoriteSong(uri: Uri) = songRepository.addToFavorites(uri)
+    suspend fun onUnfavoriteSong(uri: Uri) = songRepository.removeFromFavorites(uri)
+
     suspend fun deletePlaylist(playlist: Playlist) =
         songRepository.deleteLocalPlaylist(playlist)
 
@@ -118,4 +135,12 @@ class LocalMediaVM(
 
     suspend fun updateSongLyrics(lyricsId: String, songUri: String) =
         lyricsRepository.updateSongLyrics(lyricsId = lyricsId, songUri)
+
+    suspend fun changePlName(newName: String, name: String, id: String) =
+        songRepository.changePlaylistName(newName, name, id)
 }
+
+private data class MediaTypes(
+    val albums: List<Album>, val artists: List<Artist>, val genres: List<Genre>,
+    val favorites: List<AudioFile>
+)

@@ -8,6 +8,7 @@ import com.xandy.lite.db.tables.LyricLine
 import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.db.tables.TranslatedLyrics
 import com.xandy.lite.db.tables.TranslatedText
+import com.xandy.lite.models.application.toStrings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,10 +37,6 @@ class LyricsEditorVM(
         scope = viewModelScope, started = SharingStarted.Lazily,
         initialValue = null
     )
-    val queue = songRepository.unsortedQueue.stateIn(
-        scope = viewModelScope, started = SharingStarted.Lazily,
-        initialValue = emptyList()
-    )
     val position = songRepository.positionMs
     val duration = songRepository.durationMs
     val controller = songRepository.mediaController
@@ -49,6 +46,7 @@ class LyricsEditorVM(
     private val _translationSet = MutableStateFlow(emptyList<LyricLine>())
     val translationSet = _translationSet.asStateFlow()
     val index = lyricsRepository.indexListener
+    val appStrings = songRepository.appValues.toStrings(viewModelScope)
 
 
     fun updateQuery(q: String) = _query.update { q }
@@ -178,10 +176,33 @@ class LyricsEditorVM(
     suspend fun getSongOrNullByLyricsId(lyricsId: String) =
         lyricsRepository.getSongOrNullByLyricsId(lyricsId)
 
-    suspend fun upsertLyrics(songUri: String) =
-        lyricsRepository.upsertLyrics(songUri, _lyrics.value)
+    suspend fun upsertLyrics(songUri: String, language: String): Boolean {
+        val lyrics = _lyrics.value
+        val description = lyrics.description?.let { des ->
+            des.takeIf { d -> d.isNotBlank() }
+        }
+
+        val scroll = _scrollSet.value.toSet().takeIf { it.isNotEmpty() } ?: lyrics.scroll
+        val translated =
+            _translationSet.value.toSet().takeIf { it.isNotEmpty() }?.let {
+                TranslatedLyrics(TranslatedText.Scroll(it), language)
+            } ?: lyrics.translation
+
+        val pronunciation = _pronunciationSet.value.toSet().takeIf { it.isNotEmpty() }?.let {
+                TranslatedLyrics(TranslatedText.Scroll(it), language)
+            } ?: lyrics.pronunciation
+
+        return lyricsRepository.upsertLyrics(
+            songUri,
+            _lyrics.value.copy(
+                scroll = scroll, translation = translated, pronunciation = pronunciation,
+                description = description
+            )
+        )
+    }
 
     fun updateIndexListener(idx: Int) = lyricsRepository.updateIndex(idx)
+
     /** Start Checking the position of the song */
     fun checkPosition() = songRepository.checkPlaybackPosition()
 

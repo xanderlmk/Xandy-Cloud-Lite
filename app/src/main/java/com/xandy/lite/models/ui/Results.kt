@@ -27,3 +27,10 @@ sealed class DeleteResult {
     data class FileException(val request: PendingIntent) : DeleteResult()
     data object Failure : DeleteResult()
 }
+sealed class PriorityQueue {
+    /** A media item in the priority queue was inserted to the playlist */
+    object Sought : PriorityQueue()
+    object Skipped : PriorityQueue()
+    /** Priority Queue is finished and there is no more priority queue items in the playlist */
+    object Finished : PriorityQueue()
+}

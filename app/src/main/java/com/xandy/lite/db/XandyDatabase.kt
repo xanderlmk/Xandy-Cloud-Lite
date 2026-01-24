@@ -16,13 +16,6 @@ import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.db.tables.PlaylistSongOrder
 import com.xandy.lite.db.tables.PLSongCrossRef
 import com.xandy.lite.db.tables.Playlist
-import com.xandy.lite.models.MIGRATION_10_11
-import com.xandy.lite.models.MIGRATION_1_2
-import com.xandy.lite.models.MIGRATION_2_3
-import com.xandy.lite.models.MIGRATION_5_6
-import com.xandy.lite.models.MIGRATION_7_8
-import com.xandy.lite.models.MIGRATION_8_9
-import com.xandy.lite.models.MIGRATION_9_10
 import kotlinx.coroutines.CoroutineScope
 
 
@@ -31,8 +24,9 @@ import kotlinx.coroutines.CoroutineScope
     entities = [
         AudioFile::class, Playlist::class, PLSongCrossRef::class, Bucket::class,
         PlaylistSongOrder::class, Lyrics::class, AudioHistory::class
-    ], version = 11, exportSchema = true,
-    autoMigrations = [AutoMigration(3,4), AutoMigration(4,5), AutoMigration(6,7)]
+    ], version = 13, exportSchema = true,
+    autoMigrations =
+        [AutoMigration(3, 4), AutoMigration(4, 5), AutoMigration(6, 7), AutoMigration(11, 12)]
 )
 @TypeConverters(
     UriTypeConverter::class, TimestampConverter::class, OrderByConverter::class,
@@ -42,6 +36,7 @@ abstract class XandyDatabase : RoomDatabase() {
     abstract fun audioDao(): AudioDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun bucketDao(): BucketDao
+
     companion object {
         @Volatile
         private var Instance: XandyDatabase? = null
@@ -52,7 +47,7 @@ abstract class XandyDatabase : RoomDatabase() {
                     Room.databaseBuilder(context, XandyDatabase::class.java, "xandy_lite_database")
                         .addMigrations(
                             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_5_6, MIGRATION_7_8,
-                            MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11
+                            MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_12_13
                         )
                         .fallbackToDestructiveMigration(false)
                         .build().also { Instance = it }

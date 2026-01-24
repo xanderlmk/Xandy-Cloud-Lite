@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -45,11 +46,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.kyant.taglib.TagProperty
+import com.xandy.lite.R
 import com.xandy.lite.controllers.shareMultipleAudios
 import com.xandy.lite.models.XCToast
 import com.xandy.lite.models.ui.DeleteResult
@@ -66,16 +69,20 @@ import com.xandy.lite.ui.functions.PlayListOptions
 import com.xandy.lite.ui.functions.SearchTextField
 import com.xandy.lite.ui.functions.UpdateAudioListMetadata
 import com.xandy.lite.ui.GetUIStyle
+import com.xandy.lite.ui.functions.LibraryRouteOptions
 import com.xandy.lite.views.lyrics.LyricIndex
 import com.xandy.lite.views.player.controller.PlayerController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
-class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: NavViewModel) {
+class CustomNavigationContent(
+    internal val getUIStyle: GetUIStyle,
+    internal val navVM: NavViewModel
+) {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    fun CustomNavigationTabBars(
+    internal fun CustomNavigationTabBars(
         mainNavController: NavHostController, getController: () -> Unit,
         content: @Composable () -> Unit
     ) {
@@ -86,15 +93,17 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
         val route by navVM.route.collectAsStateWithLifecycle()
         val isSelecting by navVM.isSelecting.collectAsStateWithLifecycle()
         val isSearching by navVM.isSearching.collectAsStateWithLifecycle()
+        val isAdding by navVM.isAdding.collectAsStateWithLifecycle()
+
         val query by navVM.query.collectAsStateWithLifecycle()
         val querySet by navVM.querySet.collectAsStateWithLifecycle()
         val ci = ContentIcons(getUIStyle)
-        val onNavigate: (String) -> Unit = { r ->
+        val onNavigate: (String, String?) -> Unit = { r, extras ->
             if (route != r) {
                 navVM.updateIndexListener(LyricIndex.UNAVAILABLE)
                 if (isSelecting && r != AddToPlDestination.route) navVM.endSelect()
                 if (isSearching) navVM.resetSearch()
-                mainNavController.navigate(r)
+                mainNavController.navigate(extras ?: r)
                 navVM.updateRoute(r)
             }
         }
@@ -117,30 +126,42 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
             showMetadataDialog = Pair(false, ""); dismissEnabled = true; navVM.endSelect()
             metadataString = ""
         }
-        val modalContent = ModalContent(mainNavController, getUIStyle, navVM, route) {
-            coroutineScope.launch { drawerState.close() }
-        }
+        val modalContent = ModalContent(
+            mainNavController, getUIStyle, navVM, route,
+            onClose = { coroutineScope.launch { drawerState.close() } }
+        )
         val toast = XCToast(context)
 
-        ModalNavigationDrawer(
+        val onPressDelete: (Boolean, (Boolean) -> Unit) -> Unit = { enabled, onToggle ->
+            coroutineScope.launch {
+                onDelete(
+                    enabled, context, navVM = navVM,
+                    onToggle = onToggle
+                )
+            }
+        }
+        val onPressTryDelete: (
+            Boolean, (Boolean) -> Unit, () -> Unit,
+            (ManagedActivityResultLauncher<IntentSenderRequest, ActivityResult>)
+        ) -> Unit = { enabled, onToggle, onDismiss, it ->
+            coroutineScope.launch {
+                val selectedSongIds = navVM.getSelectedSongIds()
+                onTryDelete(
+                    enabled, context, audios = selectedSongIds, navVM = navVM,
+                    onToggle = onToggle, onDismissModal = onDismiss, writeRequestLauncher = it
+                )
+            }
+        }
+
+        NavigationDrawer(
             gesturesEnabled = route != PickedSongDestination.route &&
                     route != LocalPlDestination.route &&
                     route != EditAudioDestination.route &&
-                    route != AddToPlDestination.route,
+                    route != AddToPlDestination.route &&
+                    route != LyricsEditorDestination.route,
             drawerState = drawerState,
-            drawerContent = {
-                ModalDrawerSheet(
-                    modifier = Modifier
-                        .fillMaxWidth(0.70f),
-                    drawerContentColor = getUIStyle.themedOnContainerColor()
-                ) {
-                    modalContent.Home()
-                    modalContent.LyricList()
-                    modalContent.Settings()
-                    modalContent.AutoUpdateEnabled(audioStates.autoUpdate)
-                    modalContent.IdWritingUpdateEnabled(writingEnabled)
-                }
-            },
+            modalContent = modalContent,
+            autoUpdate = audioStates.autoUpdate, writingEnabled = writingEnabled
         ) {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -148,7 +169,10 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                     TopAppBar(
                         title = {
                             val name = plWithAudio?.playlist?.name
-                            if (route == LocalMusicDestination.route && isSearching) {
+                            if ((route == LocalMusicDestination.route ||
+                                        route == LocalPlDestination.route ||
+                                        route.isLibraryBasedRoute()) && isSearching
+                            ) {
                                 SearchTextField(
                                     query = query,
                                     onValueChange = { navVM.updateQuery(it) },
@@ -167,38 +191,9 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                         .fillMaxWidth()
                                         .padding(start = 4.dp),
                                 )
-                            } else if (route == LocalPlDestination.route && isSearching) {
-                                SearchTextField(
-                                    query = query,
-                                    onValueChange = { navVM.updateQuery(it) },
-                                    onUpdateQuerySet = { navVM.updateRecentQuery(it) },
-                                    querySet = querySet,
-                                    onTurnOff = { navVM.turnOffSearch() },
-                                    ci = ci
-                                )
                             } else if (route == LyricsEditorDestination.route) {
                                 val idx by navVM.lyricEditorIdx.collectAsStateWithLifecycle()
-                                if (idx >= LyricIndex.AVAILABLE) {
-                                    Row(
-                                        modifier = Modifier.horizontalScroll(rememberScrollState())
-                                    ) {
-                                        LyricFilterChip(
-                                            idx, LyricIndex.DESCRIPTION, "Description"
-                                        )
-                                        LyricFilterChip(
-                                            idx, LyricIndex.PLAIN, "Plain"
-                                        )
-                                        LyricFilterChip(
-                                            idx, LyricIndex.SYNCRYONIZED, "Syncryonized"
-                                        )
-                                        LyricFilterChip(
-                                            idx, LyricIndex.PRONUNCIATION, "Pronunciation"
-                                        )
-                                        LyricFilterChip(
-                                            idx, LyricIndex.TRANSLATION, "Translation"
-                                        )
-                                    }
-                                }
+                                if (idx >= LyricIndex.AVAILABLE) LyricScrollRow(idx)
                             }
                         },
                         colors = TopAppBarColors(
@@ -213,40 +208,43 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                 LocalMusicDestination.route -> {
                                     var enabled by rememberSaveable { mutableStateOf(true) }
                                     var showModal by rememberSaveable { mutableStateOf(false) }
+                                    val defaultMediaDir by
+                                    navVM.defaultMediaDir.collectAsStateWithLifecycle()
                                     WithDeleteModalAndLauncher(
-                                        onResultOk = {
-                                            coroutineScope.launch {
-                                                onDelete(
-                                                    enabled, context, navVM = navVM,
-                                                    onToggle = { enabled = it }
-                                                    )
-                                            }
-                                        }, onDismissRequest = { showModal = false },
+                                        onResultOk = { onPressDelete(enabled) { enabled = it } },
+                                        onDismissRequest = { showModal = false },
                                         onDelete = {
-                                            coroutineScope.launch {
-                                                val selectedSongIds = navVM.getSelectedSongIds()
-                                                onTryDelete(
-                                                    enabled, context, audios = selectedSongIds,
-                                                    onToggle = { t -> enabled = t },
-                                                    onDismissModal = { showModal = false },
-                                                    writeRequestLauncher = it,
-                                                    navVM = navVM
-                                                )
-                                            }
+                                            onPressTryDelete(
+                                                enabled, { e -> enabled = e },
+                                                { showModal = false }, it
+                                            )
                                         },
                                         string = "the following ${navVM.getSelectedSongIds().size} items?",
                                         showModal = showModal
                                     ) { writeRequestLauncher ->
                                         LocalAudioOptions(
-                                            audioStates = audioStates, getUIStyle = getUIStyle,
+                                            navVM = navVM, getUIStyle = getUIStyle,
+                                            defaultMediaDir = defaultMediaDir,
                                             onRefresh = {
                                                 coroutineScope.launch { navVM.updateAudioFiles() }
                                             },
                                             onSearch = { navVM.turnOnSearch() },
-                                            onUpdateSongOrder = { navVM.updateLocalALOrder(it) },
-                                            onReverseSongOrder = { navVM.reverseALOrder() },
+                                            onUpdateSongOrder = { it, hidden ->
+                                                if (hidden) navVM.updateHiddenOrder(it)
+                                                else navVM.updateLocalALOrder(it)
+                                            },
+                                            onReverseSongOrder = {
+                                                if (it) navVM.reverseHiddenOrder()
+                                                else navVM.reverseALOrder()
+                                            },
                                             onUpdatePlsOrder = { navVM.updateLocalPLOrder(it) },
                                             onReversePlsOrder = { navVM.reverseLocalPlsOrder() },
+                                            onUpdateAlbumOrder = { navVM.updateAlbumOrder(it) },
+                                            onReverseAlbumOrder = { navVM.reverseAlbumOrder() },
+                                            onUpdateArtistOrder = { navVM.updateArtistOrder(it) },
+                                            onReverseArtistOrder = { navVM.reverseArtistOrder() },
+                                            onUpdateGenreOrder = { navVM.updateGenreOrder(it) },
+                                            onReverseGenreOrder = { navVM.reverseGenreOrder() },
                                             onHideAudios = {
                                                 coroutineScope.launch {
                                                     val selectedSongIds = navVM.getSelectedSongIds()
@@ -279,7 +277,12 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                                     else navVM.endSelect()
                                                 }
                                             },
-                                            onAddSongs = { onNavigate(AddToPlDestination.route) },
+                                            onAddSongs = {
+                                                onNavigate(
+                                                    AddToPlDestination.route,
+                                                    AddToPlDestination.createRoute(true)
+                                                )
+                                            },
                                             onShareSongs = {
                                                 val selectedSongIds = navVM.getSelectedSongIds()
                                                 shareMultipleAudios(context, selectedSongIds)
@@ -289,9 +292,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                             },
                                             onSelectAll = {
                                                 navVM.selectAllSongs {
-                                                    toast.makeMessage(
-                                                        "Cannot select more than 2000 files."
-                                                    )
+                                                    toast.makeMessage(toast.unableToGet2kPlusFiles)
                                                 }
                                             },
                                             onDeleteSongs = { showModal = true }
@@ -304,7 +305,11 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                         navVM, getUIStyle,
                                         onChangeArt = { showImageModal = ShowModalFor.LocalPl },
                                         onSearch = { navVM.turnOnSearch() },
-                                        onChangeName = { showRenamePlDialog = true }
+                                        onChangeName = { showRenamePlDialog = true },
+                                        onShareSongs = {
+                                            val selectedSongIds = navVM.getSelectedSongIds()
+                                            shareMultipleAudios(context, selectedSongIds)
+                                        }
                                     )
                                 }
 
@@ -312,6 +317,39 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
 
                                 }
 
+                                in librarySet -> {
+                                    var enabled by rememberSaveable { mutableStateOf(true) }
+                                    var showModal by rememberSaveable { mutableStateOf(false) }
+                                    WithDeleteModalAndLauncher(
+                                        onResultOk = { onPressDelete(enabled) { enabled = it } },
+                                        onDismissRequest = { showModal = false },
+                                        onDelete = {
+                                            onPressTryDelete(
+                                                enabled, { e -> enabled = e },
+                                                { showModal = false }, it
+                                            )
+                                        },
+                                        string = "the following ${navVM.getSelectedSongIds().size} items?",
+                                        showModal = showModal
+                                    ) { writeRequestLauncher ->
+                                        LibraryRouteOptions(
+                                            routeFlow = navVM.route,
+                                            onSearch = { navVM.turnOnSearch() },
+                                            onShareSongs = {
+                                                val selectedSongIds = navVM.getSelectedSongIds()
+                                                shareMultipleAudios(context, selectedSongIds)
+                                            },
+                                            onAddSongs = {
+                                                onNavigate(
+                                                    AddToPlDestination.route,
+                                                    AddToPlDestination.createRoute(true)
+                                                )
+                                            },
+                                            onDeleteSongs = { showModal = true },
+                                            getUIStyle = getUIStyle
+                                        )
+                                    }
+                                }
                             }
                         },
                         navigationIcon = {
@@ -328,62 +366,64 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                         ) { ci.ContentIcon(Icons.Filled.Menu) }
                                         AddIconButton(ci) { showAddPlDialog = true }
                                     }
-                                else if (localTab == LocalMusicTabs.LIBRARY && isSelecting)
-                                    IconButton(onClick = { navVM.endSelect() }) {
-                                        ci.ContentIcon(Icons.Default.Close)
-                                    }
-                                else if (localTab == LocalMusicTabs.HIDDEN && isSelecting)
+                                else if (localTab.isSelectable() && isSelecting)
                                     IconButton(onClick = { navVM.endSelect() }) {
                                         ci.ContentIcon(Icons.Default.Close)
                                     }
                                 else IconButton(
                                     onClick = { coroutineScope.launch { drawerState.open() } }
                                 ) { ci.ContentIcon(Icons.Filled.Menu) }
-
-                            } else if (route == PickedSongDestination.route) {
-                                IconButton(onClick = {
-                                    val route =
-                                        mainNavController.previousBackStackEntry?.destination?.route
-                                    route?.let { navVM.updateRoute(it) }
-                                    navVM.stopCheckingPosition()
-                                    mainNavController.popBackStack()
-                                }) {
-                                    ci.ContentIcon(Icons.Default.KeyboardArrowDown)
+                            } else if (route == PickedSongDestination.route) IconButton(onClick = {
+                                val route =
+                                    mainNavController.previousBackStackEntry?.destination?.route
+                                route?.let { navVM.updateRoute(it) }
+                                navVM.stopCheckingPosition()
+                                mainNavController.popBackStack()
+                            }) { ci.ContentIcon(Icons.Default.KeyboardArrowDown) }
+                            else if (route == EditAudioDestination.route) IconButton(onClick = {
+                                val route =
+                                    mainNavController.previousBackStackEntry?.destination?.route
+                                route?.let { navVM.updateRoute(it) }
+                                mainNavController.popBackStack()
+                            }) { ci.ContentIcon(Icons.Default.Close) }
+                            else if (route == AddToPlDestination.route ||
+                                route == LyricsEditorDestination.route
+                            ) IconButton(onClick = {
+                                val route =
+                                    mainNavController.previousBackStackEntry?.destination?.route
+                                route?.let { navVM.updateRoute(it) }
+                                navVM.resetSearch()
+                                mainNavController.popBackStack()
+                            }) {
+                                ci.ContentIcon(Icons.Default.Close)
+                            }
+                            else if (
+                                route == LocalPlDestination.route && !isSearching && !isSelecting
+                            ) IconButton(onClick = {
+                                val route =
+                                    mainNavController.previousBackStackEntry?.destination?.route
+                                if (route != null) {
+                                    navVM.updateRoute(route); mainNavController.popBackStack()
+                                } else {
+                                    val new = LocalMusicDestination.route
+                                    navVM.updateRoute(new); mainNavController.navigate(new)
                                 }
-                            } else if (route == EditAudioDestination.route) {
-                                IconButton(onClick = {
-                                    val route =
-                                        mainNavController.previousBackStackEntry?.destination?.route
-                                    route?.let { navVM.updateRoute(it) }
-                                    mainNavController.popBackStack()
-                                }) {
+                            }) { ci.ContentIcon(Icons.Default.KeyboardArrowDown) }
+                            else if (route == LocalPlDestination.route && isAdding && !isSearching)
+                                IconButton(onClick = { navVM.endSelect() }) {
                                     ci.ContentIcon(Icons.Default.Close)
                                 }
-                            } else if (
-                                route == LocalPlDestination.route && !isSearching && !isSelecting
-                            ) {
-                                IconButton(onClick = {
-                                    val route =
-                                        mainNavController.previousBackStackEntry?.destination?.route
-                                    if (route != null) {
-                                        navVM.updateRoute(route); mainNavController.popBackStack()
-                                    } else {
-                                        val new = LocalMusicDestination.route
-                                        navVM.updateRoute(new); mainNavController.navigate(new)
-                                    }
-                                }) {
-                                    ci.ContentIcon(Icons.Default.KeyboardArrowDown)
-                                }
-                            } else if (route == SettingsDestination.route ||
-                                route == LyricsListDestination.route ||
-                                route == LyricsEditorDestination.route ||
-                                route == LocalAlbumDestination.route ||
-                                route == LocalBucketDestination.route ||
-                                route == LocalArtistDestination.route ||
-                                route == LocalGenreDestination.route
-                            ) IconButton(
+                            else if (route == SettingsDestination.route) IconButton(
                                 onClick = { coroutineScope.launch { drawerState.open() } }
                             ) { ci.ContentIcon(Icons.Filled.Menu) }
+                            else if (route.isMediaBasedRoute()) {
+                                if (!isSearching && !isSelecting) IconButton(
+                                    onClick = { coroutineScope.launch { drawerState.open() } }
+                                ) { ci.ContentIcon(Icons.Filled.Menu) }
+                                else if (!isSearching) IconButton(onClick = { navVM.endSelect() }) {
+                                    ci.ContentIcon(Icons.Default.Close)
+                                }
+                            }
                         }
                     )
                 }
@@ -397,13 +437,11 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                 dismissEnabled = false
                                 val result = navVM.insertLocalPl(name)
                                 when (result) {
-                                    InsertResult.Exists -> Toast.makeText(
-                                        context, "Name already exists", Toast.LENGTH_SHORT
-                                    ).show()
+                                    InsertResult.Exists ->
+                                        toast.makeMessage(toast.nameAlreadyExists)
 
-                                    InsertResult.Failure -> Toast.makeText(
-                                        context, "Failed to add playlist", Toast.LENGTH_SHORT
-                                    ).show()
+                                    InsertResult.Failure ->
+                                        toast.makeMessage(toast.failedToAddPl)
 
                                     InsertResult.Success -> showAddPlDialog = false
                                 }
@@ -427,12 +465,11 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                 dismissEnabled = false
                                 val result = navVM.changePlName(newName, name)
                                 when (result) {
-                                    InsertResult.Exists -> Toast.makeText(
-                                        context, "Name already exists", Toast.LENGTH_SHORT
-                                    ).show()
+                                    InsertResult.Exists ->
+                                        toast.makeMessage(toast.nameAlreadyExists)
 
                                     InsertResult.Failure -> Toast.makeText(
-                                        context, "Failed to add playlist", Toast.LENGTH_SHORT
+                                        context, "Failed to rename playlist", Toast.LENGTH_SHORT
                                     ).show()
 
                                     InsertResult.Success -> showRenamePlDialog = false
@@ -450,11 +487,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                                 if (!dismissEnabled) return@launch
                                 dismissEnabled = false
                                 when (showImageModal) {
-                                    ShowModalFor.Idle -> {
-                                        Toast.makeText(
-                                            context, "Null", Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
+                                    ShowModalFor.Idle -> toast.makeMessage(toast.nullType)
 
                                     ShowModalFor.LocalPl -> {
                                         plWithAudio?.let {
@@ -540,7 +573,7 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
                         if (route.showPlayer()) {
                             PlayerController(
                                 mc, navVM, getUIStyle = getUIStyle,
-                                onClickSong = { onNavigate(PickedSongDestination.route) },
+                                onClickSong = { onNavigate(PickedSongDestination.route, null) },
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .height(60.dp)
@@ -571,6 +604,101 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    internal fun CustomNavigationTabBars(
+        onReturnHome: () -> Unit, controller: NavHostController, content: @Composable () -> Unit
+    ) {
+        val audioStates by navVM.audioStates.collectAsStateWithLifecycle()
+        val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+        val writingEnabled by navVM.writingEnabled.collectAsStateWithLifecycle()
+        val route by navVM.route.collectAsStateWithLifecycle()
+        val coroutineScope = rememberCoroutineScope()
+        val modalContent = ModalContent(
+            controller, getUIStyle, navVM, route,
+            onClose = { coroutineScope.launch { drawerState.close() } },
+            onNavigate = {
+                if (it == LocalMusicDestination.route) onReturnHome()
+                else if (route != it) {
+                    navVM.updateIndexListener(LyricIndex.UNAVAILABLE)
+                    navVM.updateRoute(it)
+                    controller.navigate(it)
+                    coroutineScope.launch { drawerState.close() }
+                }
+            }
+        )
+        val ci = ContentIcons(getUIStyle)
+        NavigationDrawer(
+            gesturesEnabled = true, drawerState = drawerState, modalContent = modalContent,
+            autoUpdate = audioStates.autoUpdate, writingEnabled = writingEnabled
+        ) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            if (route == LyricsEditorDestination.route) {
+                                val idx by navVM.lyricEditorIdx.collectAsStateWithLifecycle()
+                                if (idx >= LyricIndex.AVAILABLE) LyricScrollRow(idx)
+                            }
+                        },
+                        colors = TopAppBarColors(
+                            containerColor = getUIStyle.topBarColor(),
+                            navigationIconContentColor = getUIStyle.themedOnContainerColor(),
+                            titleContentColor = getUIStyle.themedOnContainerColor(),
+                            actionIconContentColor = getUIStyle.themedOnContainerColor(),
+                            scrolledContainerColor = getUIStyle.themedOnContainerColor()
+                        ),
+                        navigationIcon = {
+                            IconButton(
+                                onClick = { coroutineScope.launch { drawerState.open() } }
+                            ) { ci.ContentIcon(Icons.Filled.Menu) }
+                        }
+                    )
+                }
+            ) { innerPadding ->
+                Box(Modifier.padding(innerPadding)) { content() }
+            }
+        }
+    }
+
+
+    @Composable
+    private fun NavigationDrawer(
+        gesturesEnabled: Boolean, drawerState: DrawerState, modalContent: ModalContent,
+        autoUpdate: Boolean, writingEnabled: Boolean,
+        content: @Composable () -> Unit
+    ) {
+        ModalNavigationDrawer(
+            gesturesEnabled = gesturesEnabled,
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(
+                    modifier = Modifier
+                        .fillMaxWidth(0.70f),
+                    drawerContentColor = getUIStyle.themedOnContainerColor()
+                ) {
+                    modalContent.Home()
+                    modalContent.LyricList()
+                    modalContent.Settings()
+                    modalContent.AutoUpdateEnabled(autoUpdate)
+                    modalContent.IdWritingUpdateEnabled(writingEnabled)
+                }
+            },
+        ) { content() }
+    }
+
+
+    @Composable
+    private fun LyricScrollRow(idx: Int) =
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            LyricFilterChip(idx, LyricIndex.DESCRIPTION, stringResource(R.string.Description))
+            LyricFilterChip(idx, LyricIndex.PLAIN, stringResource(R.string.Plain))
+            LyricFilterChip(idx, LyricIndex.SYNCRYONIZED, stringResource(R.string.Syncryonized))
+            LyricFilterChip(idx, LyricIndex.PRONUNCIATION, stringResource(R.string.Pronunciation))
+            LyricFilterChip(idx, LyricIndex.TRANSLATION, stringResource(R.string.Translation))
+        }
+
     @Composable
     private fun LyricFilterChip(idx: Int, lyricIndex: Int, text: String) {
         FilterChip(
@@ -579,6 +707,18 @@ class CustomNavigationContent(val getUIStyle: GetUIStyle, private val navVM: Nav
             label = { Text(text) }, modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
+
+    private fun String.isMediaBasedRoute() =
+        this == LyricsListDestination.route || this.isLibraryBasedRoute()
+
+    private fun String.isLibraryBasedRoute() =
+        this == LocalAlbumDestination.route || this == LocalBucketDestination.route ||
+                this == LocalArtistDestination.route || this == LocalGenreDestination.route
+
+    private val librarySet = setOf(
+        LocalAlbumDestination.route, LocalBucketDestination.route,
+        LocalArtistDestination.route, LocalGenreDestination.route
+    )
 }
 
 private fun requestWritePermission(
@@ -591,6 +731,7 @@ private fun requestWritePermission(
 private suspend fun updateTags(
     string: String, selectedSongIds: List<String>, navVM: NavViewModel, context: Context, it: String
 ): UpdateResult {
+    val toast = XCToast(context)
     return when (string) {
         TagProperty.ARTIST -> navVM.updateArtistsOfAL(selectedSongIds, it)
 
@@ -599,7 +740,7 @@ private suspend fun updateTags(
         TagProperty.GENRE -> navVM.updateGenreOfAL(selectedSongIds, it)
 
         else -> {
-            Toast.makeText(context, "Unknown property", Toast.LENGTH_SHORT).show()
+            toast.makeMessage(toast.unknownProperty)
             UpdateResult.Failure
         }
     }
@@ -614,15 +755,15 @@ private suspend fun onDelete(
     onToggle(false)
     val list = navVM.getSelectedSongIds().takeIf { it.isNotEmpty() }
     if (list == null) {
-        toast.makeMessage("Empty list")
+        toast.makeMessage(toast.emptyList)
         onToggle(true)
         return
     }
     val result = navVM.deleteAudios(list)
     if (result !is DeleteResult.Success)
-        toast.makeMessage("Failed to delete songs")
+        toast.makeMessage(toast.failedToDeleteTracks)
     else {
-        toast.makeMessage("Deleted ${list.size} files"); navVM.endSelect()
+        toast.makeMessage(toast.deletedTracks(list.size)); navVM.endSelect()
     }
     onToggle(true)
 }
@@ -638,7 +779,7 @@ private suspend fun onTryDelete(
     onToggle(false)
     val list = audios.takeIf { it.isNotEmpty() }
     if (list == null) {
-        toast.makeMessage("Empty list")
+        toast.makeMessage(toast.emptyList)
         onToggle(true)
         return
     }
@@ -648,15 +789,9 @@ private suspend fun onTryDelete(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 requestWritePermission(writeRequestLauncher, r.request)
 
-        is DeleteResult.Success -> Toast.makeText(
-            context,
-            "Deleted ${list.size} files",
-            Toast.LENGTH_SHORT
-        ).show()
+        is DeleteResult.Success -> toast.makeMessage(toast.deletedTracks(list.size))
 
-        else -> Toast.makeText(
-            context, "Failed to delete song", Toast.LENGTH_SHORT
-        ).show()
+        else -> toast.makeMessage(toast.failedToDeleteTracks)
     }
     onToggle(true); onDismissModal()
 }

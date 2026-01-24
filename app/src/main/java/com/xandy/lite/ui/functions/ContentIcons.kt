@@ -1,14 +1,18 @@
 package com.xandy.lite.ui.functions
 
 import android.annotation.SuppressLint
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -26,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +42,7 @@ import kotlinx.coroutines.delay
 
 @SuppressLint("ModifierParameter")
 class ContentIcons(private val getUIStyle: GetUIStyle) {
+    fun defaultColor() = getUIStyle.themedOnContainerColor()
     @Composable
     fun ContentIcon(
         icon: ImageVector, contentDescription: String? = null, modifier: Modifier = Modifier
@@ -51,46 +55,61 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
 
     @Composable
     fun ContentIcon(
-        icon: Painter, contentDescription: String? = null, modifier: Modifier = Modifier
+        @DrawableRes id: Int, contentDescription: String? = null, modifier: Modifier = Modifier
     ) {
         Icon(
-            painter = icon, modifier = modifier, contentDescription = contentDescription,
+            painter = painterResource(id), modifier = modifier,
+            contentDescription = contentDescription,
             tint = getUIStyle.themedOnContainerColor()
         )
     }
 
     @Composable
-    fun ContentIcon(icon: Painter, cd: String? = null, modifier: Modifier = Modifier, tint: Color) {
+    fun ContentIcon(
+        @DrawableRes id: Int, contentDescription: String? = null,
+        modifier: Modifier = Modifier, tint: Color
+    ) {
         Icon(
-            painter = icon, modifier = modifier, contentDescription = cd, tint = tint
+            painter = painterResource(id), modifier = modifier,
+            contentDescription = contentDescription, tint = tint
         )
     }
 
     @Composable
     fun ContentIcon(
-        icon: ImageVector, cd: String? = null, modifier: Modifier = Modifier, tint: Color
+        icon: ImageVector, contentDescription: String? = null,
+        modifier: Modifier = Modifier, tint: Color
     ) {
         Icon(
-            imageVector = icon, modifier = modifier, contentDescription = cd, tint = tint
+            imageVector = icon,
+            modifier = modifier,
+            contentDescription = contentDescription,
+            tint = tint
         )
     }
 
     @Composable
     fun ContentIcon(
-        icon: ImageVector, cd: String? = null, modifier: Modifier = Modifier, enabled: Boolean
+        icon: ImageVector,
+        contentDescription: String? = null,
+        modifier: Modifier = Modifier,
+        enabled: Boolean
     ) {
         Icon(
-            imageVector = icon, modifier = modifier, contentDescription = cd,
+            imageVector = icon, modifier = modifier, contentDescription = contentDescription,
             tint = if (enabled) getUIStyle.themedOnContainerColor() else getUIStyle.disabledThemedColor()
         )
     }
 
     @Composable
     fun ContentIcon(
-        icon: Painter, cd: String? = null, modifier: Modifier = Modifier, enabled: Boolean
+        @DrawableRes id: Int, contentDescription: String? = null,
+        modifier: Modifier = Modifier, enabled: Boolean
     ) {
         Icon(
-            painter = icon, modifier = modifier, contentDescription = cd,
+            painter = painterResource(id),
+            modifier = modifier,
+            contentDescription = contentDescription,
             tint = if (enabled) getUIStyle.themedOnContainerColor() else getUIStyle.disabledThemedColor()
         )
     }
@@ -98,10 +117,10 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
 
     @Composable
     fun RefreshButton(
-        isLoading: Boolean,isGettingPics: Boolean, onClick: () -> Unit, color: Color
+        isLoading: Boolean, isGettingPics: Boolean, onClick: () -> Unit, color: Color
     ) {
         if (!isLoading) IconButton(onClick = onClick, modifier = Modifier) {
-            ContentIcon(Icons.Default.Refresh, cd = "Refresh", tint = color)
+            ContentIcon(Icons.Default.Refresh, contentDescription = "Refresh", tint = color)
         }
         else {
             if (isGettingPics) Box(
@@ -119,10 +138,7 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
                         dots = (dots % 3) + 1
                     }
                 }
-                ContentIcon(
-                    painterResource(R.drawable.outline_animated_images),
-                    modifier = Modifier.zIndex(1f)
-                )
+                ContentIcon(R.drawable.outline_animated_images, modifier = Modifier.zIndex(1f))
                 val infinite = rememberInfiniteTransition()
                 val scale by infinite.animateFloat(
                     initialValue = 0.95f,
@@ -178,14 +194,30 @@ class ContentIcons(private val getUIStyle: GetUIStyle) {
         }
     }
 
+
     @Composable
-    fun ToggleIconButton(onClick: () -> Unit, isOn: Boolean, modifier: Modifier = Modifier) {
-        IconButton(onClick = onClick, modifier = modifier) {
-            ContentIcon(
-                icon = if (!isOn) painterResource(R.drawable.toggle_off)
-                else painterResource(R.drawable.toggle_on),
-                contentDescription = "ToggleIcon"
+    fun ToggleRow(
+        text: String, onClick: () -> Unit, isOn: Boolean, enabled: Boolean = true,
+        modifier: Modifier = Modifier
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = text, style = MaterialTheme.typography.titleMedium,
+                color = if (!enabled) getUIStyle.disabledThemedColor()
+                else getUIStyle.themedOnContainerColor()
             )
+            IconButton(onClick = onClick, modifier = modifier, enabled = enabled) {
+                ContentIcon(
+                    if (!isOn) R.drawable.toggle_off else R.drawable.toggle_on,
+                    contentDescription = "ToggleIcon",
+                    tint = if (!enabled) getUIStyle.disabledThemedColor()
+                    else getUIStyle.themedOnContainerColor()
+                )
+            }
         }
     }
 

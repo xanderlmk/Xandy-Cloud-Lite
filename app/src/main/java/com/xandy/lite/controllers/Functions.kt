@@ -12,7 +12,9 @@ import androidx.compose.ui.util.fastMap
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
+import com.xandy.lite.controllers.media.store.AudioPicToUpdate
 import com.xandy.lite.controllers.media.store.ImportedAudioDetails
 import com.xandy.lite.controllers.media.store.getArtData
 import com.xandy.lite.controllers.media.store.loadAudioFiles
@@ -29,32 +31,23 @@ import com.xandy.lite.db.AudioUri
 import com.xandy.lite.db.daos.AudioDao
 import com.xandy.lite.db.daos.BucketDao
 import com.xandy.lite.db.daos.PlaylistDao
-import com.xandy.lite.db.song.repo.MediaControllerStates
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.db.tables.Playlist
 import com.xandy.lite.db.tables.datedString
 import com.xandy.lite.db.tables.isNotInternal
-import com.xandy.lite.db.tables.toAudioFile
-import com.xandy.lite.db.tables.toBundle
+import com.xandy.lite.db.tables.itemKey
 import com.xandy.lite.db.tables.updateMetadata
 import com.xandy.lite.models.AudioIds
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.application.dataStore
-import com.xandy.lite.models.itemKey
-import com.xandy.lite.models.ui.AudioUIState
 import com.xandy.lite.models.ui.DeleteResult
 import com.xandy.lite.models.ui.InsertResult
-import com.xandy.lite.models.ui.MediaItemWithCreatedOn
 import com.xandy.lite.models.ui.UpdateResult
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -149,98 +142,81 @@ class Functions(
         }
     }
 
-    suspend fun getMediaFiles(
-        onGettingPics: (Boolean) -> Unit, onUpdate: (Boolean) -> Unit
-    ) = withContext(Dispatchers.IO) {
-        val iad = mutableListOf<ImportedAudioDetails>()
-        onUpdate(true)
-        try {
-            val volumes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-                listOf(MediaStore.VOLUME_EXTERNAL, MediaStore.VOLUME_INTERNAL)
-            else listOf("external", "internal")
-            iad += loadAudioFiles(context, volumes, audioDao)
-        } catch (_: Exception) {
-            Log.e(XANDY_CLOUD, "Failed to get audio files")
-        } finally {
-            try {
-                onGettingPics(true)
-                iad.mapIndexed { idx, item ->
-                    val art = if (item.modified) getArtData(
-                        context, item.mrp.albumId, item.mrp.contentUri
-                    ) ?: item.audio.picture else item.audio.picture
-                    iad[idx] = ImportedAudioDetails(
-                        item.audio.copy(picture = art), item.mrp,
-                        item.songIdNotNull, item.modified
-                    )
-                }
-            } catch (_: Exception) {
-                Log.w(XANDY_CLOUD, "Failed to upsert images")
-            }
-        }
-        return@withContext iad.toList()
-    }
-
-
-    suspend fun updateMediaFiles(
-        onGettingPics: (Boolean) -> Unit,
-        onUpdate: (Boolean) -> Unit,
-        iad: List<ImportedAudioDetails>
-    ) = withContext(Dispatchers.IO.limitedParallelism(10, "Update media files")) {
-        return@withContext try {
-            /** A minute to load all media */
-            try {
-                val pairs = iad.map { Pair(it.audio, it.modified) }
-                audioDao.upsertAudios(pairs)
-            } catch (e: Exception) {
-                Log.e(
-                    XANDY_CLOUD,
-                    "Failed to upsert audio files to DB: ${e.printStackTrace()}"
-                )
-            }
-
-            val newListIds = iad.map { it.audio.id }.toSet()
-            val originalList = audioDao.getAudioFiles()
-            val audioToDelete =
-                originalList.filter { original -> original.id !in newListIds }
-            try {
-                audioDao.deleteAudioFiles(audioToDelete)
-            } catch (_: Exception) {
-                Log.e(XANDY_CLOUD, "Failed to delete audio files from DB")
-            }
+    suspend fun updateMediaFiles(onGettingPics: (Boolean) -> Unit, onUpdate: (Boolean) -> Unit) =
+        withContext(Dispatchers.IO) {
+            onUpdate(true)
             try {
                 val buckets = loadBuckets(context)
                 bucketDao.upsertBuckets(buckets)
             } catch (_: Exception) {
                 Log.e(XANDY_CLOUD, "Failed to update buckets from DB")
             }
-            val writeEnabled = context.dataStore.data.map { preferences ->
-                preferences[ID_WRITE_ENABLE] ?: false
-            }.first()
-            if (!writeEnabled) return@withContext null
-            /**
-             *  If the audio doesn't have a uuid already set in the metadata,
-             *  ask to insert one in the metadata.
-             *
-             *  If it's an internal media item from the device itself, we can't edit it.
-             */
-            val newAudioIds =
-                iad.filter {
-                    !it.songIdNotNull &&
-                            !it.audio.isNotInternal()
-                }.map { AudioIds(it.audio.id, it.audio.uri) }.take(1_500)
-            val uris = newAudioIds.map { it.uri }
-            Log.i(XANDY_CLOUD, "$uris")
-            return@withContext if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && newAudioIds.isNotEmpty())
-                Pair(MediaStore.createWriteRequest(context.contentResolver, uris), newAudioIds)
-            else null
-        } catch (_: Exception) {
-            Log.e(XANDY_CLOUD, "Failed to update media files")
-            null
-        } finally {
-            onUpdate(false)
-            onGettingPics(false)
+            val iad = mutableListOf<ImportedAudioDetails>()
+            try {
+                val volumes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    listOf(MediaStore.VOLUME_EXTERNAL, MediaStore.VOLUME_INTERNAL)
+                else listOf("external", "internal")
+                loadAudioFiles(context, volumes, audioDao).collect { files ->
+                    iad += files
+                }
+            } catch (_: Exception) {
+                Log.e(XANDY_CLOUD, "Failed to get audio files")
+            }
+            try {
+                onGettingPics(true)
+                for (items in iad.chunked(50)) {
+                    val newItems = items.mapNotNull { item ->
+                        if (!item.modified) null
+                        else {
+                            val art = getArtData(
+                                context, item.mrp.albumId, item.mrp.contentUri
+                            ) ?: item.audio.picture
+                            AudioPicToUpdate(item.audio, art)
+                        }
+                    }
+                    audioDao.updateAudioMedia(newItems)
+                }
+            } catch (_: Exception) {
+                Log.w(XANDY_CLOUD, "Failed to upsert images")
+            }
+            try {
+                val newListIds = iad.map { it.audio.id }.toSet()
+                val originalList = audioDao.getAudioFiles()
+                val audioToDelete =
+                    originalList.filter { original -> original.id !in newListIds }
+                try {
+                    audioDao.deleteAudioFiles(audioToDelete)
+                } catch (_: Exception) {
+                    Log.e(XANDY_CLOUD, "Failed to delete audio files from DB")
+                }
+                val writeEnabled = context.dataStore.data.map { preferences ->
+                    preferences[ID_WRITE_ENABLE] ?: false
+                }.first()
+                if (!writeEnabled) return@withContext null
+                /**
+                 *  If the audio doesn't have a uuid already set in the metadata,
+                 *  ask to insert one in the metadata.
+                 *
+                 *  If it's an internal media item from the device itself, we can't edit it.
+                 */
+                val newAudioIds =
+                    iad.filter {
+                        !it.songIdNotNull &&
+                                !it.audio.isNotInternal()
+                    }.map { AudioIds(it.audio.id, it.audio.uri) }.take(1_500)
+                val uris = newAudioIds.map { it.uri }
+                Log.i(XANDY_CLOUD, "$uris")
+                return@withContext if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && newAudioIds.isNotEmpty())
+                    Pair(MediaStore.createWriteRequest(context.contentResolver, uris), newAudioIds)
+                else null
+            } catch (_: Exception) {
+                Log.e(XANDY_CLOUD, "Failed to update media files")
+                null
+            } finally {
+                onUpdate(false)
+                onGettingPics(false)
+            }
         }
-    }
 
     suspend fun hideAudioFiles(uris: List<String>) = withContext(Dispatchers.IO) {
         try {
@@ -267,7 +243,7 @@ class Functions(
             audioDao.hideAudioFile(uri)
             true
         } catch (e: Exception) {
-            Log.e("Xandy-Cloud", "Failed to hide audio file: $e")
+            Log.e(XANDY_CLOUD, "Failed to hide audio file: $e")
             false
         }
     }
@@ -277,23 +253,44 @@ class Functions(
             audioDao.showAudioFile(uri)
             true
         } catch (e: Exception) {
-            Log.e("Xandy-Cloud", "Failed to show audio file: $e")
+            Log.e(XANDY_CLOUD, "Failed to show audio file: $e")
+            false
+        }
+    }
+
+    suspend fun addToFavorites(uri: Uri) = withContext(Dispatchers.IO) {
+        try {
+            val exists = audioDao.getIsFavorite(uri).favorite
+            audioDao.favoriteSong(uri)
+            if (exists) InsertResult.Exists else InsertResult.Success
+        } catch (_: Exception) {
+            Log.e(XANDY_CLOUD, "Failed to favorite song")
+            InsertResult.Failure
+        }
+    }
+
+    suspend fun removeFromFavorites(uri: Uri) = withContext(Dispatchers.IO) {
+        try {
+            audioDao.unfavoriteSong(uri)
+            true
+        } catch (_: Exception) {
+            Log.e(XANDY_CLOUD, "Failed to unfavorite song")
             false
         }
     }
 
     suspend fun updateAudioTags(
         newAudio: AudioFile, mediaController: MediaController?, lyrics: Lyrics?,
-        queue: List<MediaItemWithCreatedOn>, onUpdateSong: (AudioFile) -> Unit
+        queue: List<MediaItem>, onUpdateSong: (AudioFile) -> Unit
     ) = withContext(Dispatchers.IO) {
         try {
             val title = newAudio.title.trim()
-            val artist = newAudio.artist.trim()
-            val genre = newAudio.genre?.trim()
-            val album = newAudio.album?.trim()
+            val artist = newAudio.artist?.trim()?.takeIf { it.isNotBlank() }
+            val genre = newAudio.genre?.trim()?.takeIf { it.isNotBlank() }
+            val album = newAudio.album?.trim()?.takeIf { it.isNotBlank() }
             val date = newAudio.datedString()
             val result1 = updateTitle(context, newAudio.uri, title)
-            val result2 = updateArtist(context, newAudio.uri, artist)
+            val result2 = artist?.let { updateArtist(context, newAudio.uri, it) } ?: true
             val result3 = genre?.let { updateGenre(context, newAudio.uri, it) } ?: true
             val result4 = album?.let { updateAlbum(context, newAudio.uri, it) } ?: true
             val (result5, newArtwork) = updateArtwork(context, newAudio.uri, newAudio.picture)
@@ -326,10 +323,10 @@ class Functions(
                     }
                 } else {
                     val index = queue.indexOfFirst {
-                        it.mediaItem.itemKey() == updated.id
+                        it.itemKey() == updated.id
                     }.takeIf { it >= 0 } ?: return@withContext
                     try {
-                        val updatedItem = queue[index].mediaItem.updateMetadata(updated)
+                        val updatedItem = queue[index].updateMetadata(updated)
                         controller.replaceMediaItem(index, updatedItem)
                     } catch (e: Exception) {
                         Log.w(
@@ -354,7 +351,7 @@ class Functions(
 
     suspend fun deleteAudioFiles(
         list: List<String>, mediaController: MediaController?,
-        unsortedQueue: List<MediaItemWithCreatedOn>
+        unsortedQueue: List<MediaItem>
     ) =
         withContext(Dispatchers.IO) {
             val uriList = idsToUris(list)
@@ -373,7 +370,7 @@ class Functions(
                                 runCatching {
                                     /** Remove any item to be deleted */
                                     unsortedQueue.forEachIndexed { idx, it ->
-                                        if (it.mediaItem.itemKey() in idSet) {
+                                        if (it.itemKey() in idSet) {
                                             newQueue.remove(it)
                                             mc.removeMediaItem(idx)
                                         }
@@ -383,7 +380,7 @@ class Functions(
                                             settings[QUEUE_SET] =
                                                 Json.encodeToString(
                                                     ListSerializer(String.serializer()),
-                                                    newQueue.fastMap { it.mediaItem.itemKey() }
+                                                    newQueue.fastMap { it.itemKey() }
                                                 )
                                         }
                                     } catch (e: Exception) {
@@ -455,29 +452,6 @@ class Functions(
         }
     }
 
-    suspend fun updatePickedSong(
-        songId: String, delay: Long, unknownTrackUri: Uri,
-        audioFiles: Flow<AudioUIState>, mediaController: MediaController?,
-        onUpdate: (AudioFile?) -> Unit
-    ) = withContext(Dispatchers.IO) {
-        try {
-            delay(delay)
-            val listOfAL = audioFiles.first().list
-            val item = try {
-                mediaController?.currentMediaItem
-            } catch (_: Exception) {
-                null
-            }
-            val song = listOfAL.find { it.song.uri.toString() == songId }?.song
-                ?: item?.toAudioFile(unknownTrackUri)
-            if (song == null) Log.w(XANDY_CLOUD, "NULL song.")
-            onUpdate(song)
-            return@withContext
-        } catch (e: Exception) {
-            Log.w(XANDY_CLOUD, "Failed to find track/song: $e")
-            return@withContext
-        }
-    }
 
     suspend fun addPlWithSongs(songIds: List<String>, name: String) =
         withContext(Dispatchers.IO) {

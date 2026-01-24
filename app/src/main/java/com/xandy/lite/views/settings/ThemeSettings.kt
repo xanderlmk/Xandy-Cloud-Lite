@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -31,7 +32,7 @@ import com.xandy.lite.models.application.PreferencesManager
 import com.xandy.lite.ui.GetUIStyle
 
 @Composable
-fun ThemeSettings(
+internal fun ThemeSettings(
     getUIStyle: GetUIStyle, pm: PreferencesManager, onChangeTheme: (Theme) -> Unit
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -49,7 +50,7 @@ fun ThemeSettings(
             .wrapContentSize(Alignment.TopCenter)
     ) {
         Text(
-            text = "System Theme",
+            text = stringResource(R.string.system_theme),
             fontSize = 20.sp,
             lineHeight = 22.sp,
             fontWeight = FontWeight.Bold,
@@ -60,7 +61,7 @@ fun ThemeSettings(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 onClick = { onChangeTheme(Theme.Dark) },
-                text = { Text("Dark Theme") },
+                text = { Text(stringResource(R.string.dark_theme)) },
                 leadingIcon = {
                     Icon(
                         painter = if (theme !is Theme.Dark) painterResource(R.drawable.toggle_off)
@@ -71,7 +72,7 @@ fun ThemeSettings(
             )
             DropdownMenuItem(
                 onClick = { onChangeTheme(Theme.Light) },
-                text = { Text("Light Theme") },
+                text = { Text(stringResource(R.string.light_theme)) },
                 leadingIcon = {
                     Icon(
                         painter = if (theme !is Theme.Light) painterResource(R.drawable.toggle_off)
@@ -82,7 +83,7 @@ fun ThemeSettings(
             )
             DropdownMenuItem(
                 onClick = { onChangeTheme(Theme.Default) },
-                text = { Text("Default Theme") },
+                text = { Text(stringResource(R.string.default_theme)) },
                 leadingIcon = {
                     Icon(
                         painter = if (theme !is Theme.Default) painterResource(R.drawable.toggle_off)
@@ -92,6 +93,5 @@ fun ThemeSettings(
                 }
             )
         }
-
     }
 }

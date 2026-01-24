@@ -6,8 +6,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
-import androidx.media3.common.Tracks
 import androidx.media3.session.MediaController
+import com.xandy.lite.controllers.getAlbumOrderedBy
+import com.xandy.lite.controllers.getArtistOrderedBy
+import com.xandy.lite.controllers.getGenreOrderedBy
 import com.xandy.lite.controllers.getPlsOrderedBy
 import com.xandy.lite.controllers.getSlOrderedBy
 import com.xandy.lite.db.lyrics.repo.LyricsRepository
@@ -15,8 +17,17 @@ import com.xandy.lite.db.song.repo.SongRepository
 import com.xandy.lite.db.tables.Playlist
 import com.xandy.lite.models.AudioIds
 import com.xandy.lite.models.ui.AudioUIState
+import com.xandy.lite.models.ui.IsDefaultMediaOrder
 import com.xandy.lite.models.ui.LocalAudioStates
 import com.xandy.lite.models.ui.LocalMusicTabs
+import com.xandy.lite.models.ui.MediaDirections
+import com.xandy.lite.models.ui.MediaState
+import com.xandy.lite.models.ui.order.by.AlbumOrder
+import com.xandy.lite.models.ui.order.by.ArtistOrder
+import com.xandy.lite.models.ui.order.by.GenreOrder
+import com.xandy.lite.models.ui.order.by.OrderAlbumsBy
+import com.xandy.lite.models.ui.order.by.OrderArtistBy
+import com.xandy.lite.models.ui.order.by.OrderGenresBy
 import com.xandy.lite.models.ui.order.by.PlaylistOrder
 import com.xandy.lite.models.ui.order.by.SongOrder
 import com.xandy.lite.models.ui.order.by.reverseSort
@@ -25,9 +36,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -53,7 +66,6 @@ class NavViewModel(
     )
 
     val mediaController = songRepository.mediaController
-    val tracks = songRepository.tracks
     val isPlaying = songRepository.isPlaying
     val isLoading = songRepository.isLoading
     val repeatMode = songRepository.repeatMode.stateIn(
@@ -70,6 +82,10 @@ class NavViewModel(
     val querySet = uiRepository.recentQueries.stateIn(
         scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
         initialValue = setOf()
+    )
+    val queue = songRepository.unsortedQueue.stateIn(
+        scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+        initialValue = emptyList()
     )
 
     fun updateRoute(r: String) = _route.update {
@@ -90,6 +106,11 @@ class NavViewModel(
         if (new.length > 2) uiRepository.addQuery(new)
     }
 
+    fun updateLanguage() {
+        uiRepository.onUpdateLanguage()
+    }
+
+
     fun updateMediaController(mc: MediaController) = try {
         songRepository.updateMediaController(mc)
     } catch (_: Exception) {
@@ -97,8 +118,6 @@ class NavViewModel(
 
     fun resetMediaController() = songRepository.resetMediaController()
     fun stopCheckingPosition() = songRepository.stopCheckingPlaybackPosition()
-
-    fun updateTracks(tracks: Tracks) = songRepository.updateTracks(tracks)
 
     fun updateIsPlaying(isPlaying: Boolean) = songRepository.updateIsPlaying(isPlaying)
     fun updateIsLoading(isLoading: Boolean) = songRepository.updateIsLoading(isLoading)
@@ -120,6 +139,10 @@ class NavViewModel(
     fun endSelect() = uiRepository.endSelect()
 
     fun getSelectedSongIds() = uiRepository.selectedSongIds.value
+    val listNotEmpty = uiRepository.selectedSongIds.map { it.isNotEmpty() }.stateIn(
+        scope = viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+        initialValue = true
+    )
 
     val gettingAudioPics = songRepository.gettingAudioPics
     val audioFiles = songRepository.audioFiles.stateIn(
@@ -138,9 +161,47 @@ class NavViewModel(
     val localTab = songRepository.localTab
     val selectedFolders = uiRepository.selectedBuckets
     private val _audioOrderedBy = songRepository.audioOrderedBy
-    val alDirection = getSlOrderedBy(viewModelScope, _audioOrderedBy, TIMEOUT_MILLIS)
+    private val alDirection = getSlOrderedBy(viewModelScope, _audioOrderedBy, TIMEOUT_MILLIS)
+    private val _hiddenOrderedBy = songRepository.hiddenOrderedBy
+    private val hiddenDirection = getSlOrderedBy(viewModelScope, _hiddenOrderedBy, TIMEOUT_MILLIS)
+    private val _favOrderedBy = songRepository.favOrderedBy
+    private val favDirection = getSlOrderedBy(viewModelScope, _favOrderedBy, TIMEOUT_MILLIS)
     private val _localPlsOrderedBy = songRepository.localPlsOrderedBy
-    val localPlsDirection = getPlsOrderedBy(viewModelScope, _localPlsOrderedBy, TIMEOUT_MILLIS)
+    private val localPlsDirection =
+        getPlsOrderedBy(viewModelScope, _localPlsOrderedBy, TIMEOUT_MILLIS)
+    private val _albumOrderBy = songRepository.albumOrderedBy
+    private val albumDirection = getAlbumOrderedBy(viewModelScope, _albumOrderBy, TIMEOUT_MILLIS)
+    private val _artistOrderBy = songRepository.artistOrderedBy
+    private val artistDirection = getArtistOrderedBy(viewModelScope, _artistOrderBy, TIMEOUT_MILLIS)
+    private val _genreOrderBy = songRepository.genreOrderedBy
+    private val genreDirection = getGenreOrderedBy(viewModelScope, _genreOrderBy, TIMEOUT_MILLIS)
+
+    val defaultMediaDir =
+        combine(_albumOrderBy, _artistOrderBy, _genreOrderBy) { album, artist, genre ->
+            IsDefaultMediaOrder(
+                album = album is OrderAlbumsBy.Default,
+                artist = artist is OrderArtistBy.Default,
+                genre = genre is OrderGenresBy.Default
+            )
+        }.stateIn(
+            viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+            initialValue =
+                IsDefaultMediaOrder(
+                    album = _albumOrderBy.value is OrderAlbumsBy.Default,
+                    artist = _artistOrderBy.value is OrderArtistBy.Default,
+                    genre = _genreOrderBy.value is OrderGenresBy.Default
+                )
+        )
+    private val directions = combine(
+        alDirection, hiddenDirection, localPlsDirection,
+        albumDirection, artistDirection, genreDirection, favDirection
+    ) { values ->
+        MediaDirections(
+            alDirection = values[0], hiddenDirection = values[1], plsDirection = values[2],
+            albumDirection = values[3], artistDirection = values[4], genreDirection = values[5],
+            favDirection = values[6]
+        )
+    }
 
     /** First: isSearching, Second: isSelecting, Third: localAudiosLoading */
     private val uiStates =
@@ -151,12 +212,15 @@ class NavViewModel(
             UiStates(searching, selecting, loading, autoUpdate, getting)
         }
     val audioStates = combine(
-        uiStates, localTab, localPlsDirection, alDirection
-    ) { t, tab, plDir, alDir ->
+        uiStates, localTab, directions
+    ) { t, tab, dir ->
         LocalAudioStates(
             isSearching = t.isSearching, isSelecting = t.isSelecting, tab = tab,
-            isLoading = t.localAudiosLoading, plsDirection = plDir, alDirection = alDir,
-            gettingPics = t.gettingPics, autoUpdate = t.autoUpdate
+            isLoading = t.localAudiosLoading, plsDirection = dir.plsDirection,
+            alDirection = dir.alDirection, albumDirection = dir.albumDirection,
+            artistDirection = dir.artistDirection, genreDirection = dir.genreDirection,
+            gettingPics = t.gettingPics, autoUpdate = t.autoUpdate,
+            hiddenDirection = dir.hiddenDirection, favDirections = dir.favDirection
         )
     }.stateIn(
         viewModelScope, started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
@@ -164,7 +228,10 @@ class NavViewModel(
             isSearching = isSearching.value, isSelecting = isSelecting.value,
             tab = localTab.value, isLoading = songRepository.filesLoading.value,
             plsDirection = localPlsDirection.value, alDirection = alDirection.value,
-            gettingPics = gettingAudioPics.value, autoUpdate = songRepository.autoUpdateEnabled()
+            albumDirection = albumDirection.value, artistDirection = artistDirection.value,
+            genreDirection = genreDirection.value, gettingPics = gettingAudioPics.value,
+            hiddenDirection = hiddenDirection.value, favDirections = favDirection.value,
+            autoUpdate = songRepository.autoUpdateEnabled()
         )
     )
     val writingEnabled = songRepository.idWritingEnabled.stateIn(
@@ -192,20 +259,23 @@ class NavViewModel(
 
     private val _requestEvents = MutableStateFlow<Pair<IntentSenderRequest, List<AudioIds>>?>(null)
     val requestEvents = _requestEvents.asStateFlow()
-    fun updateAudioFiles() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val list = songRepository.getMediaFiles()
-            val pendingIntent = songRepository.updateMediaFiles(list)
-            pendingIntent?.let { pending ->
-                _requestEvents.update {
-                    Pair(
-                        IntentSenderRequest.Builder(pending.first.intentSender).build(),
-                        pending.second
-                    )
-                }
+    fun updateAudioFiles() = viewModelScope.launch(Dispatchers.IO) {
+        val pendingIntent = songRepository.updateMediaFiles()
+        pendingIntent?.let { pending ->
+            _requestEvents.update {
+                Pair(
+                    IntentSenderRequest.Builder(pending.first.intentSender).build(),
+                    pending.second
+                )
             }
         }
     }
+
+
+    fun onCreateVM() {
+        if (songRepository.autoUpdateEnabled()) updateAudioFiles()
+    }
+
 
     suspend fun insertSongIdToMetadata() = _requestEvents.value?.let {
         val result = songRepository.updateSongIdTag(it.second)
@@ -222,11 +292,11 @@ class NavViewModel(
         songRepository.findPlaylistUUID(uuid).takeIf { it.isNotBlank() } ?: return@launch
     }
 
-    fun updateAlbumName(str: String) = viewModelScope.launch {
+    fun updateAlbumName(str: MediaState) = viewModelScope.launch {
         songRepository.updateLocalAlbumName(str)
     }
 
-    fun updateArtistName(str: String) = viewModelScope.launch {
+    fun updateArtistName(str: MediaState) = viewModelScope.launch {
         songRepository.updateLocalArtistName(str)
     }
 
@@ -234,20 +304,48 @@ class NavViewModel(
         songRepository.updateLocalBucketKey(Pair(s, l))
     }
 
-    fun updateGenreName(str: String) = viewModelScope.launch {
+    fun updateGenreName(str: MediaState) = viewModelScope.launch {
         songRepository.updateLocalGenreName(str)
     }
 
     fun updateLocalALOrder(songOrder: SongOrder) =
         songRepository.updateLocalALOrder(songOrder.toOrderedByClass(alDirection.value))
 
-    fun reverseALOrder() = songRepository.updateLocalALOrder(_audioOrderedBy.value.reverseSort())
+    fun reverseALOrder() =
+        songRepository.updateLocalALOrder(_audioOrderedBy.value.reverseSort())
+
+    fun updateHiddenOrder(songOrder: SongOrder) =
+        songRepository.updateHiddenOrder(songOrder.toOrderedByClass(hiddenDirection.value))
+
+    fun reverseHiddenOrder() =
+        songRepository.updateHiddenOrder(_hiddenOrderedBy.value.reverseSort())
+
+    fun updateFavoriteOrder(songOrder: SongOrder) =
+        songRepository.updateFavoriteOrder(songOrder.toOrderedByClass(favDirection.value))
+
+    fun reverseFavoriteOrder() =
+        songRepository.updateFavoriteOrder(_favOrderedBy.value.reverseSort())
 
     fun reverseLocalPlsOrder() =
         songRepository.updateLocalPLOrder(_localPlsOrderedBy.value.reverseSort())
 
     fun updateLocalPLOrder(playlistOrder: PlaylistOrder) =
         songRepository.updateLocalPLOrder(playlistOrder.toOrderedByClass(localPlsDirection.value))
+
+    fun reverseAlbumOrder() = songRepository.updateAlbumOrder(_albumOrderBy.value.reverseSort())
+
+    fun updateAlbumOrder(albumOrder: AlbumOrder) =
+        songRepository.updateAlbumOrder(albumOrder.toOrderedByClass(albumDirection.value))
+
+    fun reverseArtistOrder() =
+        songRepository.updateArtistOrder(_artistOrderBy.value.reverseSort())
+
+    fun updateArtistOrder(artistOrder: ArtistOrder) =
+        songRepository.updateArtistOrder(artistOrder.toOrderedByClass(artistDirection.value))
+
+    fun reverseGenreOrder() = songRepository.updateGenreOrder(_genreOrderBy.value.reverseSort())
+    fun updateGenreOrder(genreOrder: GenreOrder) =
+        songRepository.updateGenreOrder(genreOrder.toOrderedByClass(genreDirection.value))
 
     suspend fun hideFolders(set: Set<Pair<String, Long>>) = songRepository.hideBuckets(set)
 
@@ -265,14 +363,24 @@ class NavViewModel(
         val query = query.value
         val isSearching = isSearching.value
         val filtered =
-            if (localTab.value == LocalMusicTabs.LIBRARY) audioFiles.value.list.filter { audio ->
-                if (query.isBlank() || !isSearching) return@filter true
-                audio.song.title.contains(query, ignoreCase = true) ||
-                        audio.song.artist.contains(query, ignoreCase = true)
-            }.map { it.song } else songRepository.hiddenAudio.first().filter { audio ->
-                if (query.isBlank() || !isSearching) return@filter true
-                audio.title.contains(query, ignoreCase = true) ||
-                        audio.artist.contains(query, ignoreCase = true)
+            when (localTab.value) {
+                LocalMusicTabs.LIBRARY -> audioFiles.value.list.filter { audio ->
+                    if (query.isBlank() || !isSearching) return@filter true
+                    audio.song.title.contains(query, ignoreCase = true) ||
+                            audio.song.artist?.contains(query, ignoreCase = true) ?: false
+                }.map { it.song }
+
+                LocalMusicTabs.FAVORITES -> songRepository.favorites.first().filter { audio ->
+                    if (query.isBlank() || !isSearching) return@filter true
+                    audio.title.contains(query, ignoreCase = true) ||
+                            audio.artist?.contains(query, ignoreCase = true) ?: false
+                }
+
+                else -> songRepository.hiddenAudios.first().filter { audio ->
+                    if (query.isBlank() || !isSearching) return@filter true
+                    audio.title.contains(query, ignoreCase = true) ||
+                            audio.artist?.contains(query, ignoreCase = true) ?: false
+                }
             }
         if (filtered.size >= 2000) onMaxReached()
         uiRepository.selectAll(filtered.map { it.id }.take(2_000))
@@ -286,12 +394,12 @@ class NavViewModel(
 
 
     fun getMediaController() = songRepository.getMediaController()
+    fun handleSkipNext(shuffleEnabled: Boolean, repeatMode: Int, mc: MediaController) =
+        songRepository.handleSkipNext(shuffleEnabled, repeatMode, mc)
 
     init {
-        if (songRepository.autoUpdateEnabled()) viewModelScope.launch { updateAudioFiles() }
-        savedStateHandle.get<String?>(LOCAL_AUDIO_URI)?.let {
-            songRepository.updateAudioUri(it)
-        }
+        savedStateHandle.get<String?>(LOCAL_AUDIO_URI)
+            ?.let { songRepository.updateAudioUri(it) }
     }
 
     suspend fun updateArtistsOfAL(ids: List<String>, artist: String) =

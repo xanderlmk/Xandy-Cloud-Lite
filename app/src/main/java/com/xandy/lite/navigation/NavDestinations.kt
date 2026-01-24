@@ -8,64 +8,67 @@ private interface NavDestinations {
 }
 
 @Serializable
-object PickedSongDestination : NavDestinations {
+internal object PickedSongDestination : NavDestinations {
     override val route = "picked_song"
 }
 
 /** Local library of the device */
 @Serializable
-object LocalMusicDestination : NavDestinations {
+internal object LocalMusicDestination : NavDestinations {
     override val route = "local_songs"
 }
 
 /** Local Playlist of the device */
 @Serializable
-object LocalPlDestination : NavDestinations {
+internal object LocalPlDestination : NavDestinations {
     override val route = "local_playlist"
 }
 
 @Serializable
-object EditAudioDestination : NavDestinations {
+internal object EditAudioDestination : NavDestinations {
     override val route = "edit_local_audio"
 }
 
 /** Destination of adding local songs to a local playlist */
 @Serializable
-object AddToPlDestination : NavDestinations {
-    override val route = "add_to_playlist"
+internal object AddToPlDestination : NavDestinations {
+    override val route = "add_to_playlist/{showAdd}"
+    fun createRoute(showAdd: Boolean = false): String {
+        return "add_to_playlist/$showAdd"
+    }
 }
 
 @Serializable
-object LocalAlbumDestination : NavDestinations {
+internal object LocalAlbumDestination : NavDestinations {
     override val route = "local_album"
 }
 
 @Serializable
-object LocalArtistDestination : NavDestinations {
+internal object LocalArtistDestination : NavDestinations {
     override val route = "local_artist"
 }
 
 @Serializable
-object LocalBucketDestination : NavDestinations {
+internal object LocalBucketDestination : NavDestinations {
     override val route = "local_bucket"
 }
 
 @Serializable
-object LocalGenreDestination : NavDestinations {
+internal object LocalGenreDestination : NavDestinations {
     override val route = "local_genre"
 }
 
 @Serializable
-object SettingsDestination: NavDestinations {
+internal object SettingsDestination: NavDestinations {
     override val route = "settings"
 }
 
 @Serializable
-object LyricsListDestination: NavDestinations {
+internal object LyricsListDestination: NavDestinations {
     override val route = "lyrics_list"
 }
 
 @Serializable
-object LyricsEditorDestination: NavDestinations {
+internal object LyricsEditorDestination: NavDestinations {
     override val route = "lyrics_editor"
 }

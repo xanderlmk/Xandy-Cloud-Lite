@@ -14,8 +14,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.xandy.lite.R
 
 
 @Composable
@@ -36,8 +38,8 @@ fun DeleteModal(onDismissRequest: () -> Unit, onDelete: () -> Unit, string: Stri
                 .padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Button(onClick = onDismissRequest) { Text("Cancel") }
-            Button(onClick = onDelete) { Text("Delete") }
+            Button(onClick = onDismissRequest) { Text(stringResource(R.string.Cancel)) }
+            Button(onClick = onDelete) { Text(stringResource(R.string.Delete)) }
         }
     }
 }
@@ -76,8 +78,8 @@ fun SelectImageModal(
                             .padding(horizontal = 6.dp)
                     ) {
                         Text(
-                            text = "Gallery", modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
+                            text = stringResource(R.string.Gallery),
+                            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
                         )
                     }
                     Button(
@@ -88,12 +90,12 @@ fun SelectImageModal(
                             .padding(horizontal = 6.dp)
                     ) {
                         Text(
-                            text = "Local Artwork", modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
+                            text = stringResource(R.string.local_artwork),
+                            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
                         )
                     }
                 }
-                Button(onClick = onDismissRequest) { Text("Cancel") }
+                Button(onClick = onDismissRequest) { Text(stringResource(R.string.Cancel)) }
             }
         }
     }

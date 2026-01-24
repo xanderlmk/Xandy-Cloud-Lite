@@ -47,8 +47,7 @@ fun FolderRow(
     ) {
         if (isSelecting) {
             ci.ContentIcon(
-                if (isSelected) painterResource(R.drawable.baseline_square)
-                else painterResource(R.drawable.outline_square)
+                if (isSelected) R.drawable.baseline_square else R.drawable.outline_square
             )
         }
         Column(

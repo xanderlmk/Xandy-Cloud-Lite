@@ -8,6 +8,12 @@ private const val loadControl = "Xandy.LoadControl"
 @Serializable
 @SerialName(loadControl)
 sealed class LoadControl {
+    companion object {
+        private const val DEFAULT_MIN_BUFFER = 50_000
+        private const val DEFAULT_MAX_BUFFER = 60_000
+        private const val DEFAULT_BUFFER_FOR_PB = 1_000
+        private const val DEFAULT_BUFFER_FOR_PB_AFTER_REBUFFER = 2_000
+    }
     @Serializable
     @SerialName("$loadControl.Default")
     data object Default : LoadControl()
@@ -27,12 +33,13 @@ sealed class LoadControl {
     @Serializable
     @SerialName("$loadControl.Custom")
     data class Custom(
-        val minBuffer: Int, val maxBuffer: Int,
-        val bufferForPlayback: Int, val bufferForRebuffer: Int
+        val minBuffer: Int = DEFAULT_MIN_BUFFER, val maxBuffer: Int = DEFAULT_MAX_BUFFER,
+        val bufferForPlayback: Int = DEFAULT_BUFFER_FOR_PB,
+        val bufferForRebuffer: Int = DEFAULT_BUFFER_FOR_PB_AFTER_REBUFFER
     ) : LoadControl()
 
     /** Minimum buffer in milliseconds */
-    fun minBuffer() = when (this) {
+    internal fun minBuffer() = when (this) {
         is Balanced -> 30_000
         is Custom -> this.minBuffer
         is Default -> 50_000
@@ -41,7 +48,7 @@ sealed class LoadControl {
     }
 
     /** Maximum buffer in milliseconds */
-    fun maxBuffer() = when (this) {
+    internal fun maxBuffer() = when (this) {
         is Balanced -> 60_000
         is Custom -> this.maxBuffer
         is Default -> 60_000
@@ -50,7 +57,7 @@ sealed class LoadControl {
     }
 
     /** Buffer for playback in milliseconds */
-    fun bufferForPlayback() = when (this) {
+    internal fun bufferForPlayback() = when (this) {
         is Balanced -> 1_500
         is Custom -> this.bufferForPlayback
         is Default -> 1_000
@@ -59,7 +66,7 @@ sealed class LoadControl {
     }
 
     /** Buffer for Playback after rebuffer in milliseconds */
-    fun bufferForPlaybackAfterRebuffer() = when (this) {
+    internal fun bufferForPlaybackAfterRebuffer() = when (this) {
         is Balanced -> 3_000
         is Custom -> this.bufferForRebuffer
         is Default -> 2_000

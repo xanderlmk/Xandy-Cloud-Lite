@@ -9,9 +9,11 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.xandy.lite.controllers.media.store.AudioPicToUpdate
 import com.xandy.lite.db.AudioDateModified
 import com.xandy.lite.db.AudioUri
 import com.xandy.lite.db.AudioDetails
+import com.xandy.lite.db.AudioFavorite
 import com.xandy.lite.db.AudioSongId
 import com.xandy.lite.db.tables.AudioFile
 import com.xandy.lite.db.tables.AudioWithPls
@@ -22,7 +24,7 @@ import kotlinx.coroutines.flow.Flow
 
 
 @Dao
-interface AudioDao : LyricsDao {
+interface AudioDao : LyricsDao, HiddenTracksDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAudio(audioFile: AudioFile)
 
@@ -37,6 +39,9 @@ interface AudioDao : LyricsDao {
 
     @Query("""SELECT * FROM local_audio WHERE song_id IN (:ids) OR uri IN (:ids)""")
     suspend fun getInitialQueue(ids: List<String>): List<AudioFile>
+
+    @Query("""SELECT * FROM local_audio WHERE song_id = :id""")
+    suspend fun getTrashedItemOrNull(id: String): AudioFile?
 
     /** Permanently hide selected audio files. */
     @Query("""UPDATE local_audio SET hidden = 1, permanently_hidden = 1 WHERE song_id IN (:ids)""")
@@ -60,6 +65,8 @@ interface AudioDao : LyricsDao {
 
     @Query("""SELECT * FROM local_audio WHERE song_id IN (:ids) OR uri IN (:uris)""")
     suspend fun getAudioFiles(ids: List<String>, uris: List<Uri>): List<AudioFile>
+    @Query("""SELECT * FROM local_audio WHERE song_id IN (:ids)""")
+    fun getAudioFiles(ids: List<String>): Flow<List<AudioFile>>
 
     @Query("""SELECT uri FROM local_audio WHERE song_id IN (:ids)""")
     suspend fun getAudioUris(ids: List<String>): List<AudioUri>
@@ -73,7 +80,7 @@ interface AudioDao : LyricsDao {
 
     @Query(
         """
-        SELECT hidden, permanently_hidden, lyrics_id
+        SELECT hidden, permanently_hidden, lyrics_id, picture
         FROM local_audio WHERE song_id = :id OR uri = :uri
         """
     )
@@ -99,18 +106,18 @@ interface AudioDao : LyricsDao {
         val originalList = getAudioFiles(pairs.map { it.first.id }, pairs.map { it.first.uri })
         val originalIds = originalList.map { it.id }
         val originalUris = originalList.map { it.uri }
-        Log.i(XANDY_CLOUD, "Upserting ${pairs.size} audio files.")
+        //Log.i(XANDY_CLOUD, "ids: ${pairs.map { it.first.id }}")
         pairs.forEach { pair ->
             val audio = pair.first
             val modified = pair.second
             val songId = getAudioId(audio.uri, audio.fileId)?.id
             if (audio.uri in originalUris || audio.id in originalIds || songId != null) {
-                val d = getAudioDetails(audio.id, audio.uri)
-                if (modified)
+                if (modified) {
+                    val d = getAudioDetails(audio.id, audio.uri)
                     updateAudio(
                         AudioFile(
                             id = songId ?: audio.id, uri = audio.uri,
-                            displayName = audio.displayName, picture = audio.picture,
+                            displayName = audio.displayName, picture = d.picture,
                             title = audio.title, artist = audio.artist, album = audio.album,
                             genre = audio.genre, createdOn = audio.createdOn, hidden = d.hidden,
                             durationMillis = audio.durationMillis,
@@ -120,7 +127,19 @@ interface AudioDao : LyricsDao {
                             fileId = audio.fileId, dateModified = audio.dateModified
                         )
                     )
+                }
             } else insertAudio(audio)
+        }
+    }
+
+    @Query("""UPDATE local_audio SET picture = :picture WHERE song_id = :id OR file_id = :fileId""")
+    suspend fun updateAudioMedia(picture: Uri, id: String, fileId: Long)
+
+    @Transaction
+    suspend fun updateAudioMedia(list: List<AudioPicToUpdate>) {
+        list.forEach {
+            val songId = getAudioId(it.audio.uri, it.audio.fileId)?.id
+            updateAudioMedia(it.art, songId ?: it.audio.id, it.audio.fileId)
         }
     }
 
@@ -133,13 +152,13 @@ interface AudioDao : LyricsDao {
         """
     )
     suspend fun updateAudioTags(
-        title: String, artist: String, genre: String?, album: String?, pictureUri: Uri?,
+        title: String, artist: String?, genre: String?, album: String?, pictureUri: Uri?,
         year: Int?, day: Int?, month: Int?, lyricsId: String?, uri: String
     )
 
     @Transaction
     suspend fun updateAudioTagsAndLyrics(
-        title: String, artist: String, genre: String?, album: String?, pictureUri: Uri?,
+        title: String, artist: String?, genre: String?, album: String?, pictureUri: Uri?,
         year: Int?, day: Int?, month: Int?, lyrics: Lyrics?, uri: String
     ) {
         lyrics?.let { upsertLyrics(it) }
@@ -175,6 +194,15 @@ interface AudioDao : LyricsDao {
             )
         }
     }
+
+    @Query("""SELECT favorite FROM local_audio WHERE uri = :uri""")
+    suspend fun getIsFavorite(uri: Uri): AudioFavorite
+
+    @Query("""UPDATE local_audio SET favorite = 1 WHERE uri = :uri""")
+    suspend fun favoriteSong(uri: Uri)
+
+    @Query("""UPDATE local_audio SET favorite = 0 WHERE uri = :uri""")
+    suspend fun unfavoriteSong(uri: Uri)
 
     @Transaction
     @Query(
@@ -229,13 +257,14 @@ interface AudioDao : LyricsDao {
     fun getFlowOfSongsWithPlsByArtistDESC(): Flow<List<AudioWithPls>>
 
 
+
+
     @Query(
         """
-        SELECT * FROM local_audio WHERE hidden = 1 OR permanently_hidden = 1 
-        ORDER BY title COLLATE NOCASE ASC
-        """
+        SELECT * FROM local_audio WHERE favorite = 1 ORDER BY title COLLATE NOCASE ASC
+    """
     )
-    fun getFlowOfHiddenSongsByTitleASC(): Flow<List<AudioFile>>
+    fun getFlowOfFavoritesTitleASC(): Flow<List<AudioFile>>
 
     @Query(
         """

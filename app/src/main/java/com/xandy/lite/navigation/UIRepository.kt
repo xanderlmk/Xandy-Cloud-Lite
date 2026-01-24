@@ -43,9 +43,13 @@ interface UIRepository {
     fun startSelectingFolders(folders: List<Bucket>, selected: Pair<String, Long>)
     fun toggleBucket(id: Pair<String, Long>)
     suspend fun addQuery(str: String)
+
+    fun onUpdateLanguage()
 }
 
-class UIRepositoryImpl(private val context: Context) : UIRepository {
+class UIRepositoryImpl(
+    private val context: Context, private val onUpdateValues: () -> Unit
+) : UIRepository {
     companion object {
         private val RECENT = stringSetPreferencesKey("recent_queries")
     }
@@ -70,7 +74,7 @@ class UIRepositoryImpl(private val context: Context) : UIRepository {
 
     override fun startAdding() {
         _isSelecting.update { true }; _isAdding.update { true }
-        _selectedSongIds.update {emptyList() }
+        _selectedSongIds.update { emptyList() }
     }
 
     override fun startSelectingSongs(songId: String) {
@@ -157,6 +161,8 @@ class UIRepositoryImpl(private val context: Context) : UIRepository {
             return@withContext
         }
     }
+
+    override fun onUpdateLanguage() = onUpdateValues()
 
 
 }

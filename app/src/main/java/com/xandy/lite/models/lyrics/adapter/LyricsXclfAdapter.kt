@@ -9,6 +9,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.database.getStringOrNull
+import com.xandy.lite.BuildConfig
 import com.xandy.lite.db.tables.Lyrics
 import com.xandy.lite.models.application.XANDY_CLOUD
 import com.xandy.lite.models.encryptor.Encryptor
@@ -27,7 +28,10 @@ import kotlin.text.Charsets.UTF_8
 
 
 object LyricsXclfAdapter {
-    private val DOWNLOADS_RELATIVE_PATH = "${Environment.DIRECTORY_DOWNLOADS}/XandyLite"
+    const val MIME_TYPE = "application/x-xclf"
+    private val DOWNLOADS_RELATIVE_PATH =
+        if (BuildConfig.DEBUG) "${Environment.DIRECTORY_DOWNLOADS}/XandyDebugLite"
+        else "${Environment.DIRECTORY_DOWNLOADS}/XandyLite"
 
     // --- Constants ---
     private val MAGIC = "XCLF".toByteArray(UTF_8)
@@ -50,7 +54,7 @@ object LyricsXclfAdapter {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                put(MediaStore.MediaColumns.MIME_TYPE, MIME_TYPE)
                 put(
                     MediaStore.MediaColumns.RELATIVE_PATH,
                     relativePath
@@ -65,7 +69,7 @@ object LyricsXclfAdapter {
             // Legacy path (API < 29). Requires WRITE_EXTERNAL_STORAGE if target SDK < 29 or runtime permission.
             val downloads =
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val dir = File(downloads, "XandyLite")
+            val dir = File(downloads, if (BuildConfig.DEBUG) "XandyDebugLite" else "XandyLite")
             if (!dir.exists()) dir.mkdirs()
             val outFile = File(dir, filename)
             FileOutputStream(outFile).use { it.write(bytes) }
@@ -195,7 +199,7 @@ object LyricsXclfAdapter {
                 val selection =
                     "${MediaStore.Downloads.RELATIVE_PATH} = ? AND ${MediaStore.Downloads.DISPLAY_NAME} = ?"
                 val selectionArgs = arrayOf(
-                    "${Environment.DIRECTORY_DOWNLOADS}/XandyLite/",  // note trailing slash for folder path
+                    "$DOWNLOADS_RELATIVE_PATH/",  // note trailing slash for folder path
                     filename
                 )
                 context.contentResolver.query(
@@ -230,7 +234,7 @@ object LyricsXclfAdapter {
             // Legacy path
             val downloads =
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val dir = File(downloads, "XandyLite")
+            val dir = File(downloads,if (BuildConfig.DEBUG) "XandyDebugLite" else "XandyLite")
             val outFile = File(dir, filename)
             return@withContext if (outFile.exists()) Uri.fromFile(outFile) else null
         }
